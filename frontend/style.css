@@ -662,52 +662,57 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 1000;
-    padding: 1.5rem;
+    padding: 1rem;
 }
 
 .modal-container {
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-lg);
-    max-width: 640px;
+    max-width: 560px;
     width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 1.5rem 1.75rem;
+    padding: 1rem 1.25rem;
     border-bottom: 1px solid var(--border-color);
+    flex-shrink: 0;
 }
 
 .modal-title-group {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .scanner-icon-badge {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     background: rgba(245, 158, 11, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.25rem;
+    font-size: 1.15rem;
 }
 
 .modal-title-group h3 {
-    font-size: 1.15rem;
+    font-size: 1.05rem;
     font-weight: 700;
     color: #fff;
 }
 
 .modal-desc {
-    font-size: 0.78rem;
+    font-size: 0.75rem;
     color: var(--text-muted);
 }
 
@@ -715,18 +720,19 @@ body {
     background: transparent;
     border: none;
     color: var(--text-muted);
-    font-size: 1.8rem;
+    font-size: 1.6rem;
     line-height: 1;
     cursor: pointer;
-    padding: 4px;
+    padding: 2px 6px;
 }
 
 .modal-close-btn:hover { color: #fff; }
 
 .scanner-mode-switch {
     display: flex;
-    padding: 1rem 1.75rem 0.5rem 1.75rem;
+    padding: 0.75rem 1.25rem 0.25rem 1.25rem;
     gap: 8px;
+    flex-shrink: 0;
 }
 
 .scanner-tab {
@@ -734,14 +740,14 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    padding: 10px;
+    gap: 6px;
+    padding: 8px 12px;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     border-radius: var(--radius-sm);
     color: var(--text-muted);
     font-weight: 600;
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     cursor: pointer;
     transition: all 0.2s ease;
 }
@@ -753,17 +759,17 @@ body {
 }
 
 .scanner-camera-box {
-    padding: 1.25rem 1.75rem;
+    padding: 0.75rem 1.25rem 1rem 1.25rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .camera-reader-viewport {
     width: 100%;
-    max-width: 480px;
-    height: 300px;
+    max-width: 440px;
+    height: 220px;
     background: #000;
     border-radius: var(--radius-md);
     overflow: hidden;
@@ -776,14 +782,14 @@ body {
 }
 
 .camera-guideline { text-align: center; position: relative; }
-.scanner-instruction { font-size: 0.82rem; color: var(--text-muted); margin-top: 6px; }
+.scanner-instruction { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
 
 .camera-controls {
     width: 100%;
-    max-width: 480px;
+    max-width: 440px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 8px;
 }
 
 .btn-photo-upload {
@@ -791,7 +797,7 @@ body {
     background: linear-gradient(135deg, #2563eb, #0284c7);
     color: #fff;
     font-weight: 700;
-    padding: 12px;
+    padding: 10px 14px;
     border-radius: var(--radius-sm);
     box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
     border: none;
@@ -800,7 +806,7 @@ body {
     align-items: center;
     justify-content: center;
     gap: 8px;
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     transition: all 0.2s ease;
 }
 
