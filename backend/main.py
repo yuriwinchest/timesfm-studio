@@ -11,11 +11,12 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from engine import engine
+from lottery_service import lottery_service, LOTTERY_CONFIGS
 
 app = FastAPI(
     title="TimesFM Studio API",
-    description="Interface e API para previsão de séries temporais com Google TimesFM",
-    version="1.0.0"
+    description="Interface e API para previsão de séries temporais com Google TimesFM e Loterias Caixa",
+    version="1.1.0"
 )
 
 # Habilitar CORS para desenvolvimento local
@@ -27,7 +28,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Modelos Pydantic
+# Modelos Pydantic para Séries Temporais Genéricas
 class ForecastRequest(BaseModel):
     history: List[float] = Field(..., description="Lista de valores históricos numéricos")
     dates: Optional[List[str]] = Field(default=None, description="Lista opcional de datas correspondentes")
@@ -45,6 +46,10 @@ class ForecastResponse(BaseModel):
     inference_time_ms: float
     metrics: Dict[str, Any]
 
+# Modelos Pydantic para Loterias
+class LotteryPredictRequest(BaseModel):
+    game_id: str = Field(default="megasena", description="Identificador da loteria: megasena, quina, lotofacil, lotomania")
+
 @app.get("/api/health")
 def health_check():
     """Retorna o status de integridade do servidor e do modelo."""
@@ -54,25 +59,66 @@ def health_check():
         "model_name": engine.model_name,
         "status_message": engine.status_message,
         "backend": engine.backend,
+        "supported_lotteries": list(LOTTERY_CONFIGS.keys()),
         "timestamp": time.time()
     }
+
+# ==========================================
+# ROTAS DO MÓDULO DE LOTERIAS CAIXA
+# ==========================================
+
+@app.get("/api/lottery/games")
+def get_lottery_games():
+    """Retorna a lista de modalidades de loteria suportadas."""
+    return {
+        "games": lottery_service.get_supported_games()
+    }
+
+@app.get("/api/lottery/info/{game_id}")
+def get_lottery_info(game_id: str):
+    """Consulta o último concurso oficial em tempo real na API da Caixa."""
+    try:
+        data = lottery_service.fetch_latest_contest(game_id)
+        return {
+            "success": True,
+            "data": data
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar dados da Caixa: {str(e)}")
+
+@app.post("/api/lottery/predict")
+def predict_lottery(payload: LotteryPredictRequest):
+    """Executa a modelagem de séries temporais com TimesFM para prever o próximo concurso."""
+    try:
+        result = engine.forecast_lottery(payload.game_id)
+        return {
+            "success": True,
+            "data": result
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro durante a predição da loteria: {str(e)}")
+
+# ==========================================
+# ROTAS DE SÉRIES TEMPORAIS GERAIS (PRESETS & UPLOAD)
+# ==========================================
 
 @app.get("/api/presets")
 def get_presets():
     """Retorna séries temporais de demonstração ricas em padrões reais."""
-    # 1. ZynexLog: Volume diário de entregas (90 dias com sazonalidade semanal e crescimento)
     np.random.seed(42)
     days_90 = pd.date_range(end=pd.Timestamp.today(), periods=90, freq='D')
-    base_deliveries = 120 + np.linspace(0, 80, 90) # Tendência de alta
-    weekday_effect = np.array([25, 30, 28, 35, 45, 10, -30])[days_90.dayofweek] # Fins de semana mais baixos
+    base_deliveries = 120 + np.linspace(0, 80, 90)
+    weekday_effect = np.array([25, 30, 28, 35, 45, 10, -30])[days_90.dayofweek]
     noise_deliv = np.random.normal(0, 8, 90)
     zynex_values = np.round(np.maximum(20, base_deliveries + weekday_effect + noise_deliv), 1).tolist()
 
-    # 2. E-commerce: Faturamento diário em milhares (R$)
     base_sales = 45 + np.sin(np.linspace(0, 12, 90)) * 15
     sales_values = np.round(np.maximum(10, base_sales + np.random.normal(0, 5, 90)), 2).tolist()
 
-    # 3. Infraestrutura: Carga de CPU / Requisições por minuto (120 pontos)
     hours_120 = pd.date_range(end=pd.Timestamp.today(), periods=120, freq='h')
     base_cpu = 35 + 20 * np.sin(np.linspace(0, 20, 120)) + np.random.normal(0, 4, 120)
     cpu_values = np.round(np.clip(base_cpu, 5, 98), 1).tolist()
@@ -111,7 +157,7 @@ def get_presets():
 
 @app.post("/api/forecast", response_model=ForecastResponse)
 def run_forecast(payload: ForecastRequest):
-    """Executa a previsão com o modelo TimesFM ou motor estatístico."""
+    """Executa a previsão com o modelo TimesFM ou motor analítico."""
     try:
         result = engine.forecast(
             history=payload.history,
@@ -119,12 +165,10 @@ def run_forecast(payload: ForecastRequest):
             freq=payload.freq
         )
 
-        # Gerar datas futuras projetadas
         future_dates = []
         if payload.dates and len(payload.dates) == len(payload.history):
             try:
                 last_date = pd.to_datetime(payload.dates[-1])
-                # Tentar inferir frequência ou usar diária
                 future_dt_range = pd.date_range(
                     start=last_date + pd.Timedelta(days=1),
                     periods=payload.horizon,
@@ -163,7 +207,6 @@ async def upload_csv(file: UploadFile = File(...)):
         if df.empty:
             raise HTTPException(status_code=400, detail="O arquivo enviado está vazio.")
 
-        # Identificar coluna numérica e coluna de data
         numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
         date_cols = [c for c in df.columns if 'data' in c.lower() or 'date' in c.lower() or 'time' in c.lower() or 'dia' in c.lower()]
 

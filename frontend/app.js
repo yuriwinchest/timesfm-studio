@@ -1,453 +1,455 @@
-﻿// TimesFM Studio — Frontend Controller
-document.addEventListener('DOMContentLoaded', () => {
-    // State
-    let currentSeries = {
-        title: Logística ZYNEXLOG — Volume Diário de Encomendas,
-        description: 90 dias de histórico com sazonalidade semanal e crescimento de frota.,
-        unit: encomendas,
-        dates: [],
-        values: [],
-        horizon: 14,
-        freq: 0
-    };
+// TimesFM Studio — Controlador Frontend para Loterias Caixa e Séries Temporais
 
-    let chartInstance = null;
-    let presetsData = [];
-    let lastForecastData = null;
+class TimesFMStudio {
+    constructor() {
+        this.currentGame = 'megasena';
+        this.currentStrategy = 0;
+        this.currentLotteryData = null;
+        this.currentFilter = 'all';
+        this.probChart = null;
 
-    // DOM Elements
-    const engineStatusText = document.getElementById('engineStatusText');
-    const engineStatusPill = document.getElementById('engineStatusPill');
-    const presetsList = document.getElementById('presetsList');
-    const horizonInput = document.getElementById('horizonInput');
-    const horizonVal = document.getElementById('horizonVal');
-    const freqSelect = document.getElementById('freqSelect');
-    const runForecastBtn = document.getElementById('runForecastBtn');
-    const exportCsvBtn = document.getElementById('exportCsvBtn');
-    const chartLoadingOverlay = document.getElementById('chartLoadingOverlay');
-
-    const currentSeriesTitle = document.getElementById('currentSeriesTitle');
-    const currentSeriesDesc = document.getElementById('currentSeriesDesc');
-    const kpiLastVal = document.getElementById('kpiLastVal');
-    const kpiUnit = document.getElementById('kpiUnit');
-    const kpiAvgVal = document.getElementById('kpiAvgVal');
-    const kpiTrendVal = document.getElementById('kpiTrendVal');
-    const kpiTrendDesc = document.getElementById('kpiTrendDesc');
-    const kpiMaxVal = document.getElementById('kpiMaxVal');
-    const kpiMinVal = document.getElementById('kpiMinVal');
-    const kpiLatency = document.getElementById('kpiLatency');
-    const kpiEngine = document.getElementById('kpiEngine');
-
-    const forecastTableBody = document.getElementById('forecastTableBody');
-    const tableHorizonBadge = document.getElementById('tableHorizonBadge');
-
-    const dropzone = document.getElementById('dropzone');
-    const fileInput = document.getElementById('fileInput');
-    const fileUploadInfo = document.getElementById('fileUploadInfo');
-
-    // 1. Inicializar Verificação de Saúde
-    async function checkHealth() {
-        try {
-            const res = await fetch('/api/health');
-            if (res.ok) {
-                const data = await res.json();
-                engineStatusText.textContent = data.model_loaded ? TimesFM 200M Pronto : Motor Estatístico Ativo;
-                engineStatusPill.querySelector('.status-dot').style.background = data.model_loaded ? var(--success) : var(--accent);
-            }
-        } catch (e) {
-            engineStatusText.textContent = Servidor Local Online;
-        }
+        this.init();
     }
 
-    // 2. Carregar Séries Pré-configuradas (Presets)
-    async function loadPresets() {
-        try {
-            const res = await fetch('/api/presets');
-            const data = await res.json();
-            presetsData = data.presets || [];
-            renderPresetsList();
-
-            // Selecionar o primeiro preset por padrão
-            if (presetsData.length > 0) {
-                selectPreset(presetsData[0].id);
-            }
-        } catch (e) {
-            presetsList.innerHTML = <div class=preset-loading style=color: var(--danger)>Erro ao carregar presets.</div>;
-        }
+    init() {
+        this.bindEvents();
+        this.checkHealth();
+        this.loadAllLotteryPrizes();
+        this.selectLotteryGame('megasena');
     }
 
-    function renderPresetsList() {
-        presetsList.innerHTML = '';
-        presetsData.forEach((p, idx) => {
-            const btn = document.createElement('button');
-            btn.className = preset-btn ;
-            btn.dataset.id = p.id;
-            btn.innerHTML = 
-                <span class=preset-btn-title></span>
-                <span class=preset-btn-desc></span>
-            ;
-            btn.addEventListener('click', () => selectPreset(p.id));
-            presetsList.appendChild(btn);
-        });
-    }
+    bindEvents() {
+        // Modo de Visualização (Loterias vs Séries Gerais)
+        const modeLotteryBtn = document.getElementById('modeLotteryBtn');
+        const modeGeneralBtn = document.getElementById('modeGeneralBtn');
+        const lotteryView = document.getElementById('lotteryView');
+        const genericView = document.getElementById('genericView');
 
-    function selectPreset(presetId) {
-        const preset = presetsData.find(p => p.id === presetId);
-        if (!preset) return;
-
-        // Atualizar botões
-        document.querySelectorAll('.preset-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.dataset.id === presetId);
-        });
-
-        // Limpar info de upload
-        fileUploadInfo.style.display = 'none';
-
-        // Atualizar estado
-        currentSeries = {
-            title: preset.title,
-            description: preset.description,
-            unit: preset.unit || 'unidades',
-            dates: [...preset.dates],
-            values: [...preset.values],
-            horizon: preset.suggested_horizon || 14,
-            freq: parseInt(freqSelect.value, 10)
-        };
-
-        // Atualizar UI
-        horizonInput.value = currentSeries.horizon;
-        horizonVal.textContent = ${currentSeries.horizon} passos;
-        currentSeriesTitle.textContent = currentSeries.title;
-        currentSeriesDesc.textContent = currentSeries.description;
-        kpiUnit.textContent = currentSeries.unit;
-
-        // Executar previsão automaticamente
-        executeForecast();
-    }
-
-    // 3. Execução da Inferência
-    async function executeForecast() {
-        if (!currentSeries.values || currentSeries.values.length === 0) return;
-
-        chartLoadingOverlay.style.display = 'flex';
-        runForecastBtn.disabled = true;
-
-        try {
-            const payload = {
-                history: currentSeries.values,
-                dates: currentSeries.dates,
-                horizon: parseInt(horizonInput.value, 10),
-                freq: parseInt(freqSelect.value, 10)
-            };
-
-            const res = await fetch('/api/forecast', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+        if (modeLotteryBtn && modeGeneralBtn) {
+            modeLotteryBtn.addEventListener('click', () => {
+                modeLotteryBtn.classList.add('active');
+                modeGeneralBtn.classList.remove('active');
+                lotteryView.style.display = 'flex';
+                genericView.style.display = 'none';
             });
 
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Erro na inferência');
+            modeGeneralBtn.addEventListener('click', () => {
+                modeGeneralBtn.classList.add('active');
+                modeLotteryBtn.classList.remove('active');
+                lotteryView.style.display = 'none';
+                genericView.style.display = 'grid';
+            });
+        }
+
+        // Seletores de Loterias
+        const lotteryBtns = document.querySelectorAll('.lottery-card-btn');
+        lotteryBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const game = btn.getAttribute('data-game');
+                this.selectLotteryGame(game);
+            });
+        });
+
+        // Seletores de Estratégia do Jogo
+        const stratBtns = document.querySelectorAll('.strategy-tab');
+        stratBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                stratBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.currentStrategy = parseInt(btn.getAttribute('data-strategy'), 10);
+                this.renderSuggestedGame();
+            });
+        });
+
+        // Recalcular Previsão
+        const recalcBtn = document.getElementById('recalculateLotteryBtn');
+        if (recalcBtn) {
+            recalcBtn.addEventListener('click', () => {
+                this.loadLotteryPrediction(this.currentGame);
+            });
+        }
+
+        // Copiar Jogo
+        const copyBtn = document.getElementById('copyGameBtn');
+        if (copyBtn) {
+            copyBtn.addEventListener('click', () => {
+                this.copyCurrentGameToClipboard();
+            });
+        }
+
+        // Filtros das Dezenas
+        const filterBtns = document.querySelectorAll('.filter-pill');
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                filterBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                this.currentFilter = btn.getAttribute('data-filter');
+                this.renderNumbersMatrix();
+                this.renderProbabilityChart();
+            });
+        });
+    }
+
+    async checkHealth() {
+        const statusText = document.getElementById('engineStatusText');
+        const statusPill = document.getElementById('engineStatusPill');
+
+        try {
+            const res = await fetch('/api/health');
+            const data = await res.json();
+            if (statusText) {
+                statusText.textContent = data.model_loaded 
+                    ? 'Google TimesFM Pronto (PyTorch CPU)' 
+                    : 'Motor Analítico Ativo (Caixa Live)';
+            }
+        } catch (e) {
+            if (statusText) {
+                statusText.textContent = 'Modo Local / Standalone';
+            }
+        }
+    }
+
+    async loadAllLotteryPrizes() {
+        const games = ['megasena', 'quina', 'lotofacil', 'lotomania'];
+        for (const g of games) {
+            try {
+                const res = await fetch(`/api/lottery/info/${g}`);
+                const json = await res.json();
+                if (json.success && json.data) {
+                    const prizeBadge = document.getElementById(`badgePrize${this.capitalize(g)}`);
+                    const statusBadge = document.getElementById(`badgeStatus${this.capitalize(g)}`);
+                    
+                    if (prizeBadge) {
+                        prizeBadge.textContent = this.formatCurrency(json.data.valor_estimado_proximo);
+                    }
+                    if (statusBadge) {
+                        statusBadge.textContent = json.data.acumulou ? 'Acumulou 🔥' : 'Premiado ✨';
+                        statusBadge.style.color = json.data.acumulou ? '#fbbf24' : '#34d399';
+                    }
+                }
+            } catch (e) {
+                console.warn(`Erro ao buscar prêmio de ${g}:`, e);
+            }
+        }
+    }
+
+    selectLotteryGame(gameId) {
+        this.currentGame = gameId;
+
+        // Atualiza estilo do body e dos botões
+        document.body.className = `theme-${gameId}`;
+        document.querySelectorAll('.lottery-card-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-game') === gameId);
+        });
+
+        this.loadLotteryPrediction(gameId);
+    }
+
+    async loadLotteryPrediction(gameId) {
+        const ballsContainer = document.getElementById('predictedBallsContainer');
+        if (ballsContainer) {
+            ballsContainer.innerHTML = `
+                <div class="loading-balls">
+                    <div class="spinner"></div>
+                    <span>Executando inferência com TimesFM para ${this.capitalize(gameId)}...</span>
+                </div>
+            `;
+        }
+
+        try {
+            const res = await fetch('/api/lottery/predict', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ game_id: gameId })
+            });
+
+            const json = await res.json();
+            if (!json.success || !json.data) {
+                throw new Error(json.detail || 'Falha ao processar previsão.');
             }
 
-            const data = await res.json();
-            lastForecastData = data;
+            this.currentLotteryData = json.data;
+            this.renderFullLotteryDashboard();
 
-            updateKPIs(data);
-            renderChart(data);
-            renderTable(data);
-
-        } catch (error) {
-            alert(Erro ao calcular previsão: );
-        } finally {
-            chartLoadingOverlay.style.display = 'none';
-            runForecastBtn.disabled = false;
+        } catch (e) {
+            console.error('Erro na previsão:', e);
+            if (ballsContainer) {
+                ballsContainer.innerHTML = `<div style="color: var(--danger)">Erro: ${e.message}</div>`;
+            }
         }
     }
 
-    // 4. Atualizar Métricas e KPIs
-    function updateKPIs(data) {
-        const m = data.metrics;
-        kpiLastVal.textContent = m.last_value.toLocaleString('pt-BR');
-        kpiAvgVal.textContent = m.forecast_avg.toLocaleString('pt-BR');
-        
-        const isPositive = m.trend_percentage >= 0;
-        kpiTrendVal.textContent = ${isPositive ? '+' : ''}%;
-        kpiTrendVal.style.color = isPositive ? 'var(--success)' : 'var(--danger)';
-        kpiTrendDesc.textContent = isPositive ? 'Tendência de Alta' : 'Tendência de Baixa';
+    renderFullLotteryDashboard() {
+        const data = this.currentLotteryData;
+        if (!data) return;
 
-        kpiMaxVal.textContent = m.forecast_max.toLocaleString('pt-BR');
-        kpiMinVal.textContent = m.forecast_min.toLocaleString('pt-BR');
+        // 1. Títulos e Badges
+        const predTitle = document.getElementById('predictionTitle');
+        const confScore = document.getElementById('confidenceScore');
+        const latVal = document.getElementById('engineLatency');
 
-        kpiLatency.textContent = ${data.inference_time_ms} ms;
-        kpiEngine.textContent = data.engine;
-    }
-
-    // 5. Renderizar Gráfico Interativo com Chart.js
-    function renderChart(data) {
-        const ctx = document.getElementById('forecastChart').getContext('2d');
-
-        const histLabels = currentSeries.dates.length === currentSeries.values.length
-            ? currentSeries.dates
-            : currentSeries.values.map((_, i) => T-);
-
-        const futureLabels = data.future_dates || [];
-        const allLabels = [...histLabels, ...futureLabels];
-
-        const historyPadded = [...currentSeries.values, ...Array(data.horizon).fill(null)];
-        
-        // A linha de previsão começa no último valor histórico para continuidade visual
-        const forecastPadded = Array(currentSeries.values.length - 1).fill(null);
-        forecastPadded.push(currentSeries.values[currentSeries.values.length - 1]);
-        forecastPadded.push(...data.forecast);
-
-        const lowerPadded = Array(currentSeries.values.length - 1).fill(null);
-        lowerPadded.push(currentSeries.values[currentSeries.values.length - 1]);
-        lowerPadded.push(...data.lower_bound);
-
-        const upperPadded = Array(currentSeries.values.length - 1).fill(null);
-        upperPadded.push(currentSeries.values[currentSeries.values.length - 1]);
-        upperPadded.push(...data.upper_bound);
-
-        if (chartInstance) {
-            chartInstance.destroy();
+        if (predTitle) {
+            predTitle.textContent = `Projeção para o Próximo Concurso: ${data.game_name} #${data.target_contest}`;
+        }
+        if (confScore) {
+            confScore.textContent = `${data.confidence_score}%`;
+        }
+        if (latVal) {
+            latVal.textContent = `Inferência: ${data.inference_time_ms} ms`;
         }
 
-        // Criar gradiente para a área histórica
-        const histGradient = ctx.createLinearGradient(0, 0, 0, 350);
-        histGradient.addColorStop(0, 'rgba(59, 130, 246, 0.25)');
-        histGradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+        // 2. Renderizar Jogo Sugerido
+        this.renderSuggestedGame();
 
-        chartInstance = new Chart(ctx, {
-            type: 'line',
+        // 3. Renderizar Último Concurso Oficial e Comparativo
+        this.renderLatestContestSection();
+
+        // 4. Renderizar Gráfico e Matriz de Dezenas
+        this.renderProbabilityChart();
+        this.renderNumbersMatrix();
+    }
+
+    renderSuggestedGame() {
+        const data = this.currentLotteryData;
+        if (!data || !data.suggested_games) return;
+
+        const game = data.suggested_games[this.currentStrategy] || data.suggested_games[0];
+        const container = document.getElementById('predictedBallsContainer');
+        const parityBalance = document.getElementById('parityBalance');
+        const sumBalance = document.getElementById('sumBalance');
+
+        if (container) {
+            container.innerHTML = '';
+            const sizeClass = game.numbers.length > 15 ? 'mini-size' : (game.numbers.length > 6 ? 'compact-size' : '');
+            
+            game.numbers.forEach(num => {
+                const ball = document.createElement('div');
+                ball.className = `ball ball-${this.currentGame} ${sizeClass}`;
+                ball.textContent = num;
+                container.appendChild(ball);
+            });
+        }
+
+        if (parityBalance) {
+            parityBalance.textContent = `${game.evens} Pares / ${game.odds} Ímpares`;
+        }
+        if (sumBalance) {
+            sumBalance.textContent = `Soma Total: ${game.sum}`;
+        }
+    }
+
+    renderLatestContestSection() {
+        const data = this.currentLotteryData;
+        if (!data || !data.latest_contest_full) return;
+
+        const latest = data.latest_contest_full;
+        const comp = data.comparison_with_latest;
+
+        // Títulos
+        const contestTitle = document.getElementById('latestContestTitle');
+        const contestLoc = document.getElementById('latestContestLocation');
+        const jackpotVal = document.getElementById('jackpotValue');
+        const jackpotStatus = document.getElementById('jackpotStatusText');
+        const matchTag = document.getElementById('matchTag');
+
+        if (contestTitle) {
+            contestTitle.textContent = `Concurso #${latest.concurso} realizado em ${latest.data_apuracao}`;
+        }
+        if (contestLoc) {
+            contestLoc.textContent = `Local: ${latest.local_sorteio} — ${latest.municipio_sorteio}`;
+        }
+        if (jackpotVal) {
+            jackpotVal.textContent = this.formatCurrency(latest.valor_estimado_proximo);
+        }
+        if (jackpotStatus) {
+            jackpotStatus.textContent = latest.acumulou ? '🔥 Acumulou para o Próximo:' : '✨ Estimativa Próximo:';
+        }
+        if (matchTag) {
+            matchTag.innerHTML = `Comparação com Projeção IA: <strong>${comp.hits_count} Acertos (${comp.hit_rate_pct}%)</strong>`;
+        }
+
+        // Bolas do Último Concurso
+        const ballsContainer = document.getElementById('latestOfficialBalls');
+        if (ballsContainer) {
+            ballsContainer.innerHTML = '';
+            const sizeClass = latest.dezenas.length > 15 ? 'mini-size' : (latest.dezenas.length > 6 ? 'compact-size' : '');
+            
+            const matchedSet = new Set(comp.matched_numbers || []);
+
+            latest.dezenas.forEach(num => {
+                const ball = document.createElement('div');
+                const isMatched = matchedSet.has(num);
+                ball.className = `ball ball-${this.currentGame} ${sizeClass} ${isMatched ? 'matched-hit' : ''}`;
+                ball.textContent = num;
+                if (isMatched) {
+                    ball.title = 'Acerto na Projeção IA!';
+                }
+                ballsContainer.appendChild(ball);
+            });
+        }
+
+        // Tabela de Rateio
+        const tableBody = document.getElementById('payoutTableBody');
+        if (tableBody && latest.rateio) {
+            tableBody.innerHTML = '';
+            latest.rateio.forEach(row => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${row.descricao}</td>
+                    <td>${row.ganhadores.toLocaleString('pt-BR')} apostas</td>
+                    <td class="prize-val">${this.formatCurrency(row.premio)}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+    }
+
+    renderProbabilityChart() {
+        const data = this.currentLotteryData;
+        if (!data || !data.all_numbers_ranking) return;
+
+        const ctx = document.getElementById('lotteryProbChart');
+        if (!ctx) return;
+
+        let ranking = [...data.all_numbers_ranking];
+
+        if (this.currentFilter === 'hot') {
+            ranking = ranking.filter(x => x.recent_freq >= 2);
+        } else if (this.currentFilter === 'delay') {
+            ranking = ranking.filter(x => x.delay >= 5);
+        } else if (this.currentFilter === 'ai') {
+            ranking = ranking.slice(0, 15);
+        }
+
+        // Ordenar por número para gráfico limpo
+        ranking.sort((a, b) => a.number - b.number);
+
+        const labels = ranking.map(x => x.number_str);
+        const scores = ranking.map(x => x.score);
+        const delays = ranking.map(x => x.delay);
+
+        if (this.probChart) {
+            this.probChart.destroy();
+        }
+
+        const colorMap = {
+            megasena: '#209869',
+            quina: '#6a38eb',
+            lotofacil: '#d63384',
+            lotomania: '#f78100'
+        };
+        const activeColor = colorMap[this.currentGame] || '#209869';
+
+        this.probChart = new Chart(ctx, {
+            type: 'bar',
             data: {
-                labels: allLabels,
+                labels: labels,
                 datasets: [
                     {
-                        label: 'Limite Superior (90%)',
-                        data: upperPadded,
-                        borderColor: 'transparent',
-                        backgroundColor: 'rgba(56, 189, 248, 0.12)',
-                        fill: '+1',
-                        pointRadius: 0,
-                        tension: 0.3
-                    },
-                    {
-                        label: 'Limite Inferior (90%)',
-                        data: lowerPadded,
-                        borderColor: 'transparent',
-                        backgroundColor: 'transparent',
-                        fill: false,
-                        pointRadius: 0,
-                        tension: 0.3
-                    },
-                    {
-                        label: 'Histórico Registrado',
-                        data: historyPadded,
-                        borderColor: '#3b82f6',
-                        backgroundColor: histGradient,
-                        borderWidth: 2.2,
-                        fill: true,
-                        pointRadius: currentSeries.values.length > 50 ? 0 : 3,
-                        pointHoverRadius: 5,
-                        tension: 0.25
-                    },
-                    {
-                        label: 'Previsão TimesFM',
-                        data: forecastPadded,
-                        borderColor: '#38bdf8',
-                        borderWidth: 2.5,
-                        borderDash: [5, 4],
-                        backgroundColor: 'transparent',
-                        pointRadius: 4,
-                        pointBackgroundColor: '#38bdf8',
-                        pointBorderColor: '#080c14',
-                        pointBorderWidth: 2,
-                        pointHoverRadius: 6,
-                        tension: 0.25
+                        label: 'Probabilidade TimesFM',
+                        data: scores,
+                        backgroundColor: activeColor,
+                        borderRadius: 4,
+                        borderSkipped: false
                     }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                interaction: {
-                    intersect: false,
-                    mode: 'index'
-                },
                 plugins: {
                     legend: { display: false },
                     tooltip: {
-                        backgroundColor: 'rgba(12, 18, 30, 0.95)',
+                        backgroundColor: '#111a2e',
                         borderColor: '#1e2d4a',
                         borderWidth: 1,
-                        titleColor: '#f8fafc',
-                        bodyColor: '#94a3b8',
-                        padding: 12,
-                        cornerRadius: 8,
                         callbacks: {
-                            label: function(context) {
-                                if (context.raw === null || context.dataset.label.includes('Limite')) return null;
-                                return  :  ;
+                            afterLabel: (ctx) => {
+                                const idx = ctx.dataIndex;
+                                return `Atraso: ${delays[idx]} concursos | Freq: ${ranking[idx].recent_freq} recentes`;
                             }
                         }
                     }
                 },
                 scales: {
                     x: {
-                        grid: { color: 'rgba(30, 45, 74, 0.4)' },
-                        ticks: {
-                            color: '#64748b',
-                            maxTicksLimit: 12,
-                            font: { family: 'Inter', size: 11 }
-                        }
+                        grid: { display: false },
+                        ticks: { color: '#94a3b8', font: { family: 'JetBrains Mono', size: 10 } }
                     },
                     y: {
                         grid: { color: 'rgba(30, 45, 74, 0.4)' },
-                        ticks: {
-                            color: '#64748b',
-                            font: { family: 'JetBrains Mono', size: 11 }
-                        }
+                        ticks: { color: '#64748b' }
                     }
                 }
             }
         });
     }
 
-    // 6. Renderizar Tabela de Previsões
-    function renderTable(data) {
-        forecastTableBody.innerHTML = '';
-        tableHorizonBadge.textContent = ${data.horizon} passos futuros;
+    renderNumbersMatrix() {
+        const data = this.currentLotteryData;
+        if (!data || !data.all_numbers_ranking) return;
 
-        data.forecast.forEach((val, idx) => {
-            const dateStr = data.future_dates[idx] || Passo +;
-            const lower = data.lower_bound[idx];
-            const upper = data.upper_bound[idx];
-            const spread = upper - lower;
-            const isUncertain = spread > (val * 0.4);
+        const grid = document.getElementById('numbersMatrixGrid');
+        if (!grid) return;
 
-            const tr = document.createElement('tr');
-            tr.innerHTML = 
-                <td><strong></strong></td>
-                <td style=color: var(--accent); font-weight: 600;></td>
-                <td style=color: #f87171;></td>
-                <td style=color: #34d399;></td>
-                <td>
-                    <span class=risk-badge >
-                        
-                    </span>
-                </td>
-            ;
-            forecastTableBody.appendChild(tr);
+        grid.innerHTML = '';
+        let ranking = [...data.all_numbers_ranking];
+
+        if (this.currentFilter === 'hot') {
+            ranking = ranking.filter(x => x.recent_freq >= 2);
+        } else if (this.currentFilter === 'delay') {
+            ranking = ranking.filter(x => x.delay >= 5);
+        } else if (this.currentFilter === 'ai') {
+            ranking = ranking.slice(0, 15);
+        }
+
+        ranking.sort((a, b) => a.number - b.number);
+
+        ranking.forEach(item => {
+            const cell = document.createElement('div');
+            cell.className = 'number-cell';
+            cell.innerHTML = `
+                <span class="cell-num">${item.number_str}</span>
+                <span class="cell-status">${item.status}</span>
+                <span class="cell-freq">Atraso: ${item.delay}</span>
+            `;
+            grid.appendChild(cell);
         });
     }
 
-    // 7. Eventos de Upload de Arquivo
-    dropzone.addEventListener('click', () => fileInput.click());
+    copyCurrentGameToClipboard() {
+        const data = this.currentLotteryData;
+        if (!data || !data.suggested_games) return;
 
-    dropzone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropzone.classList.add('dragover');
-    });
+        const game = data.suggested_games[this.currentStrategy] || data.suggested_games[0];
+        const text = `${data.game_name} (Concurso #${data.target_contest}): ${game.numbers.join(' - ')}`;
 
-    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
-
-    dropzone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropzone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) {
-            handleFileUpload(e.dataTransfer.files[0]);
-        }
-    });
-
-    fileInput.addEventListener('change', (e) => {
-        if (e.target.files.length > 0) {
-            handleFileUpload(e.target.files[0]);
-        }
-    });
-
-    async function handleFileUpload(file) {
-        const formData = new FormData();
-        formData.append('file', file);
-
-        fileUploadInfo.style.display = 'block';
-        fileUploadInfo.innerHTML = Lendo <strong></strong>...;
-
-        try {
-            const res = await fetch('/api/upload-csv', {
-                method: 'POST',
-                body: formData
-            });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Erro ao processar arquivo.');
+        navigator.clipboard.writeText(text).then(() => {
+            const btnText = document.getElementById('copyBtnText');
+            if (btnText) {
+                const original = btnText.textContent;
+                btnText.textContent = '✅ Bilhete Copiado!';
+                setTimeout(() => {
+                    btnText.textContent = original;
+                }, 2500);
             }
+        }).catch(err => {
+            console.error('Falha ao copiar:', err);
+        });
+    }
 
-            const data = await res.json();
+    formatCurrency(val) {
+        if (!val || isNaN(val)) return 'R$ 0,00';
+        return val.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
 
-            // Desmarcar botões de preset
-            document.querySelectorAll('.preset-btn').forEach(btn => btn.classList.remove('active'));
+    capitalize(str) {
+        if (!str) return '';
+        return str.charAt(0).toUpperCase() + str.slice(1);
+    }
+}
 
-            currentSeries = {
-                title: Dados Importados: ,
-                description: ${data.total_rows} registros lidos da coluna ".,
- unit: 'unidades',
- dates: data.dates,
- values: data.values,
- horizon: parseInt(horizonInput.value, 10),
- freq: parseInt(freqSelect.value, 10)
- };
-
- currentSeriesTitle.textContent = currentSeries.title;
- currentSeriesDesc.textContent = currentSeries.description;
- kpiUnit.textContent = currentSeries.unit;
-
- fileUploadInfo.innerHTML = <strong></strong>: pontos identificados com sucesso!;
-
- executeForecast();
- } catch (err) {
- fileUploadInfo.style.background = 'rgba(239, 68, 68, 0.15)';
- fileUploadInfo.style.borderColor = 'rgba(239, 68, 68, 0.4)';
- fileUploadInfo.style.color = '#fca5a5';
- fileUploadInfo.innerHTML = Erro: ;
- }
- }
-
- // 8. Controles e Eventos de UI
- horizonInput.addEventListener('input', (e) => {
- horizonVal.textContent = ${e.target.value} passos;
- });
-
- runForecastBtn.addEventListener('click', () => {
- executeForecast();
- });
-
- exportCsvBtn.addEventListener('click', () => {
- if (!lastForecastData) {
- alert('Calcule uma previsão antes de exportar.');
- return;
- }
-
- let csvContent = data:text/csv;charset=utf-8,Data_Passo,Previsao_TimesFM,Limite_Inferior_90,Limite_Superior_90\n;
- lastForecastData.forecast.forEach((val, idx) => {
- const dateStr = lastForecastData.future_dates[idx] || T+;
- const lower = lastForecastData.lower_bound[idx];
- const upper = lastForecastData.upper_bound[idx];
- csvContent += ,,,\n;
- });
-
- const encodedUri = encodeURI(csvContent);
- const link = document.createElement(a);
- link.setAttribute(href, encodedUri);
- link.setAttribute(download, imesfm_previsao_.csv);
- document.body.appendChild(link);
- link.click();
- document.body.removeChild(link);
- });
-
- // Iniciar
- checkHealth();
- loadPresets();
+// Inicializar quando o DOM carregar
+document.addEventListener('DOMContentLoaded', () => {
+    window.timesfmStudio = new TimesFMStudio();
 });
