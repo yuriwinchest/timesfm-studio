@@ -12,6 +12,8 @@ from pydantic import BaseModel, Field
 
 from engine import engine
 from lottery_service import lottery_service, LOTTERY_CONFIGS
+from ticket_scanner import ticket_scanner
+from ticket_checker import check_ticket
 
 app = FastAPI(
     title="TimesFM Studio API",
@@ -49,6 +51,11 @@ class ForecastResponse(BaseModel):
 # Modelos Pydantic para Loterias
 class LotteryPredictRequest(BaseModel):
     game_id: str = Field(default="megasena", description="Identificador da loteria: megasena, quina, lotofacil, lotomania")
+
+class TicketCheckRequest(BaseModel):
+    game_id: str = Field(..., description="Modalidade do bilhete: megasena, quina, lotofacil, lotomania")
+    numbers: List[str] = Field(..., min_length=1, max_length=60, description="Dezenas apostadas no bilhete")
+    contest: Optional[int] = Field(default=None, ge=1, le=99999, description="Numero do concurso; vazio usa o ultimo")
 
 @app.get("/api/health")
 def health_check():
@@ -115,6 +122,54 @@ def predict_lottery(payload: LotteryPredictRequest):
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro durante a predição da loteria: {str(e)}")
+
+# ==========================================
+# ROTAS DE CONFERÊNCIA DE BILHETES FÍSICOS
+# ==========================================
+
+MAX_TICKET_IMAGE_BYTES = 8 * 1024 * 1024
+ALLOWED_TICKET_MIMES = {"image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"}
+
+@app.get("/api/lottery/scanner-status")
+def scanner_status():
+    """Diagnóstico honesto do módulo óptico: diz se OCR e leitor de QR estão de pé."""
+    available, reason = ticket_scanner.is_available()
+    return {
+        "ocr_available": available,
+        "detail": reason,
+        "note": ("O QR do comprovante da Caixa não carrega as dezenas apostadas. "
+                 "As dezenas são lidas do texto impresso via OCR e sempre confirmadas pelo usuário.")
+    }
+
+@app.post("/api/lottery/scan-ticket")
+async def scan_ticket(file: UploadFile = File(...), game_id: Optional[str] = Form(default=None)):
+    """
+    Recebe a foto do comprovante e devolve modalidade, concurso e dezenas lidas.
+    Nunca confere sozinho: o retorno exige confirmação do usuário na tela.
+    """
+    if file.content_type not in ALLOWED_TICKET_MIMES:
+        raise HTTPException(status_code=415, detail=f"Formato de imagem não suportado: {file.content_type}")
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Arquivo de imagem vazio.")
+    if len(content) > MAX_TICKET_IMAGE_BYTES:
+        raise HTTPException(status_code=413, detail="Imagem acima de 8MB. Reduza a resolução da foto.")
+
+    hint = game_id.lower() if game_id and game_id.lower() in LOTTERY_CONFIGS else None
+    result = ticket_scanner.scan(content, hint_game=hint)
+    return {"success": result["success"], "data": result}
+
+@app.post("/api/lottery/check-ticket")
+def check_ticket_route(payload: TicketCheckRequest):
+    """Confere as dezenas informadas contra o resultado oficial da Caixa."""
+    try:
+        result = check_ticket(payload.game_id, payload.numbers, payload.contest)
+        return {"success": True, "data": result}
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Erro ao conferir o bilhete na base da Caixa: {str(e)}")
 
 # ==========================================
 # ROTAS DE SÉRIES TEMPORAIS GERAIS (PRESETS & UPLOAD)

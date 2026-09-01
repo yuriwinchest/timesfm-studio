@@ -39,6 +39,9 @@ O sistema opera de forma **100% isolada e resiliente** em ambiente local (Window
        ├── /api/lottery/games     -> Retorna as configurações das modalidades suportadas
        ├── /api/lottery/info/{id} -> Consulta em tempo real o último concurso oficial na Caixa
        ├── /api/lottery/predict   -> Modelagem de séries temporais TimesFM e geração de apostas
+       ├── /api/lottery/scan-ticket    -> OCR do comprovante físico (OpenCV + Tesseract) e leitura do QR
+       ├── /api/lottery/check-ticket   -> Conferência oficial das dezenas contra o resultado da Caixa
+       ├── /api/lottery/scanner-status -> Diagnóstico do módulo óptico (OCR/QR disponíveis)
        ├── /api/presets           -> Séries temporais de demonstração
        ├── /api/forecast          -> Previsão de séries temporais genéricas
        └── /api/upload-csv        -> Leitor e analisador de planilhas

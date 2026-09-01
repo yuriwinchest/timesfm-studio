@@ -273,7 +273,6 @@
             <!-- ÁREA DA CÂMERA & FOTO HD -->
             <div class="scanner-camera-box" id="scannerCameraBox">
                 <div id="cameraReader" class="camera-reader-viewport"></div>
-                <div id="offscreenReader" style="display: none;"></div>
                 <div class="camera-guideline" id="cameraGuideline">
                     <p class="scanner-instruction" id="scannerInstruction">Enquadre o QR Code ou tire uma foto nítida do comprovante</p>
                 </div>
@@ -309,6 +308,19 @@
                 </div>
                 <div class="quick-picker-grid" id="quickPickerGrid">
                     <!-- Gerado dinamicamente para a loteria ativa -->
+                </div>
+            </div>
+
+            <!-- PAINEL DE CONFIRMAÇÃO DAS DEZENAS LIDAS -->
+            <div class="ticket-confirm-box" id="ticketConfirmBox" style="display: none;">
+                <div class="confirm-head">
+                    <h4>Confira as dezenas lidas do seu comprovante</h4>
+                    <p class="confirm-sub" id="confirmSubtitle"></p>
+                </div>
+                <div class="lottery-balls-row compact" id="confirmBalls"></div>
+                <div class="confirm-actions">
+                    <button class="btn btn-primary" id="confirmTicketBtn">✅ Está correto — Conferir na Caixa</button>
+                    <button class="btn btn-outline" id="editTicketBtn">✏️ Corrigir dezenas</button>
                 </div>
             </div>
 
@@ -351,6 +363,7 @@
         </div>
     </div>
 
+    <script src="/static/scanner.js"></script>
     <script src="/static/app.js"></script>
 </body>
 </html>

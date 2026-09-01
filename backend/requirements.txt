@@ -4,3 +4,7 @@ pydantic>=2.6.0
 numpy>=1.24.0
 pandas>=2.1.0
 python-multipart>=0.0.9
+pillow>=10.2.0
+opencv-python-headless>=4.9.0.80
+pytesseract>=0.3.10
+pyzbar>=0.1.9

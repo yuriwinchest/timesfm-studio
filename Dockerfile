@@ -11,10 +11,14 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Instala dependências de compilação essenciais
+# Dependências de compilação + stack óptica (OCR do comprovante e leitura de QR)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     build-essential \
+    tesseract-ocr \
+    tesseract-ocr-por \
+    libzbar0 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 # Instala PyTorch específico para CPU primeiro (camada de cache)

@@ -908,6 +908,37 @@ body {
     box-shadow: 0 0 10px var(--theme-glow);
 }
 
+/* Painel de confirmação das dezenas lidas pelo OCR do comprovante */
+.ticket-confirm-box {
+    padding: 1.25rem 1.75rem 1.5rem;
+    border-top: 1px solid var(--border-color);
+    background: rgba(56, 189, 248, 0.05);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.confirm-head h4 {
+    font-size: 0.98rem;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 2px;
+}
+
+.confirm-sub {
+    font-size: 0.76rem;
+    color: var(--text-muted);
+    font-family: var(--font-mono);
+}
+
+.confirm-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.confirm-actions .btn { flex: 1 1 180px; }
+
 .ticket-check-result {
     padding: 1.5rem 1.75rem;
     border-top: 1px solid var(--border-color);
