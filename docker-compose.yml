@@ -1,0 +1,32 @@
+﻿version: '3.8'
+
+services:
+  timesfm-studio:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: timesfm-studio
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:8100:8100 # Exposto apenas internamente para o Caddy
+    environment:
+      - MAX_CPU_THREADS=2
+      - PORT=8100
+      - HF_HOME=/home/appuser/.cache/huggingface
+    volumes:
+      # Cache persistente do modelo para não baixar os pesos a cada reinício
+      - ./hf_cache:/home/appuser/.cache/huggingface
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'       # Máximo de 2 núcleos de CPU (protege outros sites)
+          memory: 3500M     # Teto de 3.5GB de RAM (evita OOM da VPS)
+        reservations:
+          cpus: '0.5'
+          memory: 1024M
+    healthcheck:
+      test: [CMD, curl, -f, http://localhost:8100/api/health]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s

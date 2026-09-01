@@ -1,0 +1,21 @@
+﻿# Bloco de configuração para o /etc/caddy/Caddyfile da VPS Hostinger
+# Substitua pelo subdomínio configurado (ex: timesfm.zynexlog.com.br ou timesfm.largadabrasil.com)
+
+timesfm.SEUDOMINIO.com.br {
+    encode gzip zstd
+
+    # Proxy para o container isolado do TimesFM Studio
+    reverse_proxy 127.0.0.1:8100 {
+        header_up Host {host}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Forwarded-Proto {scheme}
+    }
+
+    # Cabeçalhos de segurança (Crowley)
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+}

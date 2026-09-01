@@ -1,0 +1,25 @@
+﻿# Python
+__pycache__/
+*.py[cod]
+*.class
+.venv/
+env/
+venv/
+ENV/
+
+# Model Cache & Local Weights
+hf_cache/
+*.pt
+*.bin
+*.safetensors
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Environment variables
+.env
+.env.local

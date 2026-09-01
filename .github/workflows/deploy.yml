@@ -1,0 +1,65 @@
+﻿name: Deploy TimesFM Studio to VPS
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Lint & Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate Python Syntax
+        run: |
+          python -m py_compile backend/main.py
+          python -m py_compile backend/engine.py
+
+  deploy:
+    name: Deploy to Hostinger VPS
+    needs: validate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy via SSH to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+            echo "Iniciando deploy do TimesFM Studio..."
+            
+            DEPLOY_DIR="/var/www/timesfm-studio"
+            mkdir -p $DEPLOY_DIR
+            cd $DEPLOY_DIR
+
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/yuriwinchest/timesfm-studio.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            # Criar pasta de cache para os modelos
+            mkdir -p hf_cache
+            chmod -R 777 hf_cache
+
+            # Subir ou recriar containers Docker isolados com limites de CPU e RAM
+            echo "Subindo container Docker isolado..."
+            docker compose down || true
+            docker compose up -d --build
+
+            echo "Deploy concluido com sucesso!"
