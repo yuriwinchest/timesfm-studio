@@ -13,6 +13,8 @@ services:
       - HF_HOME=/home/appuser/.cache/huggingface
     volumes:
       - ./hf_cache:/home/appuser/.cache/huggingface
+      - ./frontend:/app/frontend:ro
+      - ./backend:/app/backend:ro
     deploy:
       resources:
         limits:
