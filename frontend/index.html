@@ -273,6 +273,7 @@
             <!-- ÁREA DA CÂMERA & FOTO HD -->
             <div class="scanner-camera-box" id="scannerCameraBox">
                 <div id="cameraReader" class="camera-reader-viewport"></div>
+                <div id="offscreenReader" style="display: none;"></div>
                 <div class="camera-guideline" id="cameraGuideline">
                     <p class="scanner-instruction" id="scannerInstruction">Enquadre o QR Code ou tire uma foto nítida do comprovante</p>
                 </div>
@@ -296,6 +297,11 @@
 
             <!-- ÁREA MANUAL DE DEZENAS -->
             <div class="manual-check-box" id="manualCheckBox" style="display: none;">
+                <div class="contest-input-row">
+                    <label for="manualContestInput" class="manual-label">Concurso nº:</label>
+                    <input type="number" id="manualContestInput" placeholder="Ex: 2962" class="custom-input contest-input">
+                    <span class="contest-tip">(Deixe em branco para o último concurso ou digite o número)</span>
+                </div>
                 <p class="manual-hint">Selecione ou digite as dezenas jogadas no seu bilhete:</p>
                 <div class="manual-input-group">
                     <input type="text" id="manualNumbersInput" placeholder="Ex: 03, 11, 24, 38, 42, 55" class="custom-input">

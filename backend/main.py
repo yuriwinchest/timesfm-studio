@@ -88,6 +88,20 @@ def get_lottery_info(game_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar dados da Caixa: {str(e)}")
 
+@app.get("/api/lottery/contest/{game_id}/{contest_number}")
+def get_lottery_contest(game_id: str, contest_number: int):
+    """Retorna os dados oficiais de um concurso específico pelo número (ex: 2962, 6707, 3051)."""
+    try:
+        data = lottery_service.fetch_contest_by_number(game_id, contest_number)
+        return {
+            "success": True,
+            "data": data
+        }
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar dados do concurso {contest_number}: {str(e)}")
+
 @app.post("/api/lottery/predict")
 def predict_lottery(payload: LotteryPredictRequest):
     """Executa a modelagem de séries temporais com TimesFM para prever o próximo concurso."""

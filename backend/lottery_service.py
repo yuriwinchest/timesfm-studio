@@ -111,6 +111,40 @@ class LotteryService:
             self.cache[game_id] = {"data": fallback, "timestamp": now}
             return fallback
 
+    def fetch_contest_by_number(self, game_id: str, contest_number: int) -> Dict[str, Any]:
+        """Consulta um concurso específico pelo seu número diretamente na API oficial da Caixa."""
+        game_id = game_id.lower()
+        if game_id not in LOTTERY_CONFIGS:
+            raise ValueError(f"Modalidade de loteria não suportada: {game_id}")
+
+        cache_key = f"{game_id}_{contest_number}"
+        cached = self.cache.get(cache_key)
+        if cached:
+            return cached["data"]
+
+        config = LOTTERY_CONFIGS[game_id]
+        endpoint = f"{config['api_endpoint']}/{contest_number}"
+
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://loterias.caixa.gov.br/"
+        }
+
+        try:
+            req = urllib.request.Request(endpoint, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                payload = response.read().decode("utf-8")
+                raw_data = json.loads(payload)
+
+            parsed = self._parse_caixa_response(game_id, raw_data)
+            self.cache[cache_key] = {"data": parsed, "timestamp": time.time()}
+            return parsed
+        except Exception as e:
+            logger.warning(f"Erro ao consultar concurso {contest_number} da {game_id} na Caixa: {e}")
+            return self.fetch_latest_contest(game_id)
+
     def _parse_caixa_response(self, game_id: str, raw: Dict[str, Any]) -> Dict[str, Any]:
         config = LOTTERY_CONFIGS[game_id]
         

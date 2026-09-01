@@ -379,17 +379,16 @@ class TimesFMStudio {
             const config = {
                 fps: 15,
                 qrbox: (viewfinderWidth, viewfinderHeight) => {
-                    const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
                     return {
-                        width: Math.floor(minEdge * 0.85),
-                        height: Math.floor(minEdge * 0.85)
+                        width: Math.floor(viewfinderWidth * 0.9),
+                        height: Math.floor(viewfinderHeight * 0.85)
                     };
                 },
-                aspectRatio: 1.0,
+                aspectRatio: 0.76, // Formato Retrato / Vertical (como celular)
                 videoConstraints: {
                     facingMode: this.currentCameraFacing,
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
+                    width: { ideal: 1080 },
+                    height: { ideal: 1920 }
                 }
             };
 
@@ -448,7 +447,7 @@ class TimesFMStudio {
         }
 
         try {
-            const scanner = new Html5Qrcode("cameraReader");
+            const scanner = new Html5Qrcode("offscreenReader");
             
             // Tentar decodificar normal
             try {
@@ -624,8 +623,10 @@ class TimesFMStudio {
         }
     }
 
-    checkManualGame() {
+    async checkManualGame() {
         const input = document.getElementById('manualNumbersInput');
+        const contestInput = document.getElementById('manualContestInput');
+        
         if (!input || !input.value.trim()) {
             alert('Por favor, selecione ou digite os números do seu bilhete.');
             return;
@@ -637,14 +638,29 @@ class TimesFMStudio {
             return;
         }
 
-        this.evaluateTicket([...new Set(numbers)]);
+        const contestNum = contestInput && contestInput.value.trim() ? parseInt(contestInput.value.trim()) : null;
+        let contestData = this.currentLotteryData ? this.currentLotteryData.latest_contest_full : null;
+
+        if (contestNum) {
+            try {
+                const res = await fetch(`/api/lottery/contest/${this.currentGame}/${contestNum}`);
+                const json = await res.json();
+                if (json.success && json.data) {
+                    contestData = json.data;
+                }
+            } catch (e) {
+                console.warn('Erro ao buscar concurso específico:', e);
+            }
+        }
+
+        this.evaluateTicket([...new Set(numbers)], contestData);
     }
 
-    evaluateTicket(userNumbers) {
-        const data = this.currentLotteryData;
-        if (!data || !data.latest_contest_full) return;
+    evaluateTicket(userNumbers, targetContestData = null) {
+        const contest = targetContestData || (this.currentLotteryData ? this.currentLotteryData.latest_contest_full : null);
+        if (!contest) return;
 
-        const officialNumbers = data.latest_contest_full.dezenas;
+        const officialNumbers = contest.dezenas || [];
         const officialSet = new Set(officialNumbers);
 
         // Identificar acertos
@@ -656,8 +672,8 @@ class TimesFMStudio {
         let prizeMoney = 0;
         let isWinner = false;
 
-        if (data.latest_contest_full.rateio) {
-            for (const r of data.latest_contest_full.rateio) {
+        if (contest.rateio) {
+            for (const r of contest.rateio) {
                 if (r.descricao.includes(`${hitCount} acertos`) || (hitCount === 6 && r.faixa === 1) || (hitCount === 5 && r.descricao.includes('Quina'))) {
                     faixaDesc = r.descricao;
                     prizeMoney = r.premio;
@@ -684,12 +700,12 @@ class TimesFMStudio {
             if (banner) banner.className = 'result-banner';
             if (icon) icon.textContent = '🎉';
             if (title) title.textContent = `PARABÉNS! VOCÊ FEZ ${hitCount} ACERTOS!`;
-            if (subtitle) subtitle.textContent = isWinner ? `Bilhete premiado na faixa: ${faixaDesc}!` : 'Excelente pontuação no concurso oficial!';
+            if (subtitle) subtitle.textContent = `Resultado oficial do Concurso #${contest.concurso} • ${isWinner ? `Premiado na faixa: ${faixaDesc}` : 'Excelente pontuação!'}`;
         } else {
             if (banner) banner.className = 'result-banner loser';
             if (icon) icon.textContent = '🎯';
             if (title) title.textContent = `Você acertou ${hitCount} dezena(s).`;
-            if (subtitle) subtitle.textContent = 'Não foi dessa vez para a faixa principal, continue tentando!';
+            if (subtitle) subtitle.textContent = `Resultado oficial do Concurso #${contest.concurso} • Não foi dessa vez para a faixa principal.`;
         }
 
         if (statHits) statHits.textContent = hitCount;

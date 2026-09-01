@@ -767,14 +767,15 @@ body {
 }
 
 .camera-reader-viewport {
-    width: 100%;
-    max-width: 440px;
-    height: 220px;
+    width: 290px;
+    height: 380px;
+    max-width: 90vw;
     background: #000;
     border-radius: var(--radius-md);
     overflow: hidden;
     position: relative;
     border: 2px solid var(--border-color);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
 }
 
 .camera-reader-viewport.mirrored video {
@@ -786,7 +787,7 @@ body {
 
 .camera-controls {
     width: 100%;
-    max-width: 440px;
+    max-width: 320px;
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -826,6 +827,34 @@ body {
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.contest-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(14, 21, 38, 0.7);
+    padding: 8px 12px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-color);
+}
+
+.manual-label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    white-space: nowrap;
+}
+
+.contest-input {
+    max-width: 110px;
+    padding: 6px 10px;
+    font-size: 0.88rem;
+}
+
+.contest-tip {
+    font-size: 0.72rem;
+    color: var(--text-muted);
 }
 
 .manual-hint { font-size: 0.82rem; color: var(--text-muted); }
