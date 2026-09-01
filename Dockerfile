@@ -1,9 +1,8 @@
-﻿# Dockerfile para o TimesFM Studio (Otimizado para CPU e VPS)
+# Dockerfile para o TimesFM Studio (Otimizado para CPU e VPS)
 FROM python:3.11-slim
 
-# Metadados
-LABEL maintainer=ZYNEXLOG Tech Team
-LABEL description=TimesFM Studio - Time Series Foundation Model by Google Research
+LABEL maintainer="yuriwinchester"
+LABEL description="TimesFM Studio - Time Series Foundation Model by Google Research"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -40,4 +39,4 @@ EXPOSE 8100
 WORKDIR /app/backend
 
 # Inicia o servidor ASGI Uvicorn
-CMD [uvicorn, main:app, --host, 0.0.0.0, --port, 8100, --workers, 1]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8100", "--workers", "1"]
