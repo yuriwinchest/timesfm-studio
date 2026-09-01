@@ -22,8 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Instala PyTorch específico para CPU primeiro (camada de cache)
-# Faixa fechada no major: torch 3.x nao foi validado neste motor nem cabe nos limites da VPS
-RUN pip install --no-cache-dir "torch>=2.0.0,<3.0.0" --index-url https://download.pytorch.org/whl/cpu
+# Versao exata que roda em producao hoje (confirmada no log do deploy 101de7b).
+# torch e a dependencia mais pesada da imagem: deriva aqui muda consumo de RAM na VPS.
+RUN pip install --no-cache-dir "torch==2.14.0+cpu" --index-url https://download.pytorch.org/whl/cpu
 
 # Copia e instala dependências Python do backend
 COPY backend/requirements.txt /app/backend/
