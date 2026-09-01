@@ -270,14 +270,27 @@
                 </button>
             </div>
 
-            <!-- ÁREA DA CÂMERA -->
+            <!-- ÁREA DA CÂMERA & FOTO HD -->
             <div class="scanner-camera-box" id="scannerCameraBox">
                 <div id="cameraReader" class="camera-reader-viewport"></div>
                 <div class="camera-guideline" id="cameraGuideline">
-                    <p class="scanner-instruction">Enquadre o QR Code impresso no comprovante da Caixa</p>
+                    <p class="scanner-instruction" id="scannerInstruction">Enquadre o QR Code ou tire uma foto nítida do comprovante</p>
                 </div>
+                
                 <div class="camera-controls">
-                    <button class="btn btn-secondary btn-sm" id="switchCameraBtn">Alternar Câmera</button>
+                    <input type="file" id="ticketPhotoInput" accept="image/*" capture="environment" style="display: none;">
+                    <button class="btn btn-photo-upload" id="triggerPhotoBtn">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                            <circle cx="12" cy="13" r="4"></circle>
+                        </svg>
+                        <span>📸 Tirar Foto / Enviar Foto do Bilhete</span>
+                    </button>
+                    
+                    <div class="camera-sub-actions">
+                        <button class="btn btn-secondary btn-sm" id="switchCameraBtn">🔄 Alternar Câmera</button>
+                        <button class="btn btn-secondary btn-sm" id="flipMirrorBtn">↔️ Desespelhar (Inverter)</button>
+                    </div>
                 </div>
             </div>
 

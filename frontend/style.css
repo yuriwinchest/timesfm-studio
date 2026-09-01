@@ -771,8 +771,49 @@ body {
     border: 2px solid var(--border-color);
 }
 
+.camera-reader-viewport.mirrored video {
+    transform: scaleX(-1) !important;
+}
+
 .camera-guideline { text-align: center; position: relative; }
-.scanner-instruction { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
+.scanner-instruction { font-size: 0.82rem; color: var(--text-muted); margin-top: 6px; }
+
+.camera-controls {
+    width: 100%;
+    max-width: 480px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-photo-upload {
+    width: 100%;
+    background: linear-gradient(135deg, #2563eb, #0284c7);
+    color: #fff;
+    font-weight: 700;
+    padding: 12px;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 0.9rem;
+    transition: all 0.2s ease;
+}
+
+.btn-photo-upload:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5);
+}
+
+.camera-sub-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+}
 
 .manual-check-box {
     padding: 1.25rem 1.75rem;
