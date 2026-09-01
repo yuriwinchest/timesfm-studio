@@ -21,7 +21,7 @@ O sistema opera de forma **100% isolada e resiliente** em ambiente local (Window
 [ Navegador / Usuário ]
           │
           ▼ (HTTPS - SSL Let's Encrypt / Caddy)
-[ Caddy Proxy Reverso (VPS Hostinger 179.198.97.28) ]
+[ Caddy Proxy Reverso (VPS Hostinger) ]
           │
           ▼ (Proxy interno na porta 127.0.0.1:8100)
 [ Docker Container: timesfm-studio ]
@@ -79,9 +79,9 @@ d:\Projetos\Clientes\timesfm-studio\
 | :--- | :--- | :--- |
 | **Repositório GitHub** | `yuriwinchest/timesfm-studio` | Repositório com branch `main`. |
 | **Pipeline CI/CD** | GitHub Actions (`deploy.yml`) | Segredos `VPS_HOST`, `VPS_USER` e `VPS_PASSWORD` no GitHub Secrets. |
-| **VPS Hostinger** | `179.198.97.28` (Porta SSH 22) | Usuário: `root`. Pasta da aplicação: `/var/www/timesfm-studio`. |
+| **VPS Hostinger** | Configurada via GitHub Secrets | Protegida por firewall e chaves SSH. |
 | **Porta Interna do Container** | `127.0.0.1:8100` | Mapeada estritamente para localhost. |
-| **Domínio / Subdomínio** | `timesfm.yuriwinchester.com.br` | Apontamento DNS tipo `A` para `179.198.97.28`. |
+| **Domínio / Subdomínio** | `timesfm.yuriwinchester.com.br` | Apontamento DNS protegido por SSL/TLS. |
 | **Proxy Reverso & SSL** | Caddy (`/etc/caddy/Caddyfile`) | Emissão e renovação automática de certificado SSL. |
 | **API Externa de Loterias** | `servicebus2.caixa.gov.br` | Endpoints REST públicos da Caixa Econômica Federal. |
 | **Segurança do `.env`** | Arquivo local `.env` | **Protegido no `.gitignore`**. NUNCA versionado no Git. |
