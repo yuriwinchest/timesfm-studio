@@ -1,10 +1,16 @@
-fastapi>=0.110.0
-uvicorn[standard]>=0.28.0
-pydantic>=2.6.0
-numpy>=1.24.0
-pandas>=2.1.0
-python-multipart>=0.0.9
-pillow>=10.2.0
-opencv-python-headless>=4.9.0.80
-pytesseract>=0.3.10
-pyzbar>=0.1.9
+# Versoes fixadas nas que rodam em producao hoje (deploy 0b16bba, 01/09/2026).
+# Motivo: com faixas abertas (>=), cada rebuild da imagem sorteava versoes novas.
+# O rebuild de 01/09 pulou sozinho para pandas 3.x, numpy 2.4 e opencv 5.x.
+# Para subir qualquer uma delas: altere aqui, valide o motor e o scanner, e so entao suba.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+pydantic==2.13.5
+numpy==2.4.6
+pandas==3.0.5
+python-multipart==0.0.32
+
+# Stack optica da conferencia de bilhetes (exige tesseract-ocr e libzbar0 no sistema)
+pillow==12.3.0
+opencv-python-headless==5.0.0.93
+pytesseract==0.3.13
+pyzbar==0.1.9

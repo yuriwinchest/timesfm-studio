@@ -22,12 +22,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Instala PyTorch específico para CPU primeiro (camada de cache)
-RUN pip install --no-cache-dir torch>=2.0.0 --index-url https://download.pytorch.org/whl/cpu
+# Faixa fechada no major: torch 3.x nao foi validado neste motor nem cabe nos limites da VPS
+RUN pip install --no-cache-dir "torch>=2.0.0,<3.0.0" --index-url https://download.pytorch.org/whl/cpu
 
 # Copia e instala dependências Python do backend
 COPY backend/requirements.txt /app/backend/
 RUN pip install --no-cache-dir -r /app/backend/requirements.txt
-RUN pip install --no-cache-dir timesfm
+RUN pip install --no-cache-dir timesfm==3.0.0
 
 # Copia o código da aplicação
 COPY backend/ /app/backend/
