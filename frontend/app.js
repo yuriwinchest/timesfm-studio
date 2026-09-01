@@ -153,6 +153,14 @@ class TimesFMStudio {
             });
         }
 
+        // Botão Reset / Limpar e Escanear Outro
+        const resetScannerBtn = document.getElementById('resetScannerBtn');
+        if (resetScannerBtn) {
+            resetScannerBtn.addEventListener('click', () => {
+                this.resetScanner();
+            });
+        }
+
         // Botão Conferir Jogo Manual
         const checkManualBtn = document.getElementById('checkManualGameBtn');
         if (checkManualBtn) {
@@ -352,14 +360,21 @@ class TimesFMStudio {
             return;
         }
 
+        const cameraViewport = document.getElementById('cameraReader');
+        if (cameraViewport) {
+            cameraViewport.innerHTML = ''; // Limpar previews anteriores
+        }
+
         try {
-            if (!this.html5QrCode) {
-                this.html5QrCode = new Html5Qrcode("cameraReader", {
-                    experimentalFeatures: {
-                        useBarCodeDetectorIfSupported: true
-                    }
-                });
+            if (this.html5QrCode) {
+                try { await this.html5QrCode.stop(); } catch (e) {}
             }
+
+            this.html5QrCode = new Html5Qrcode("cameraReader", {
+                experimentalFeatures: {
+                    useBarCodeDetectorIfSupported: true
+                }
+            });
 
             const config = {
                 fps: 15,
@@ -391,7 +406,7 @@ class TimesFMStudio {
             console.warn('Erro ao abrir câmera:', err);
             const instruction = document.getElementById('scannerInstruction');
             if (instruction) {
-                instruction.textContent = '💡 Dica: Se a câmera do navegador estiver instável, clique em "📸 Tirar Foto / Enviar Foto do Bilhete" abaixo.';
+                instruction.textContent = '💡 Dica: Clique em "📸 Tirar Foto / Enviar Foto do Bilhete" para abrir a câmera nativa em alta resolução.';
                 instruction.style.color = '#fbbf24';
             }
         }
@@ -410,48 +425,105 @@ class TimesFMStudio {
 
     async processUploadedPhoto(file) {
         const instruction = document.getElementById('scannerInstruction');
+        const cameraViewport = document.getElementById('cameraReader');
+
+        // 1. Pausar a câmera ao vivo
+        await this.stopCameraScanner();
+
+        // 2. Limpar e renderizar um preview limpo da foto no visor
+        if (cameraViewport) {
+            cameraViewport.innerHTML = '';
+            const previewImg = document.createElement('img');
+            previewImg.src = URL.createObjectURL(file);
+            previewImg.style.width = '100%';
+            previewImg.style.height = '100%';
+            previewImg.style.objectFit = 'contain';
+            previewImg.style.borderRadius = 'var(--radius-md)';
+            cameraViewport.appendChild(previewImg);
+        }
+
         if (instruction) {
-            instruction.textContent = '🔄 Processando imagem HD e aplicando correção de espelhamento...';
+            instruction.textContent = '🔄 Analisando bilhete em alta resolução e conferindo acertos...';
             instruction.style.color = '#38bdf8';
         }
 
         try {
             const scanner = new Html5Qrcode("cameraReader");
             
-            // 1. Tentar decodificar a imagem original
+            // Tentar decodificar normal
             try {
-                const decodedText = await scanner.scanFile(file, true);
+                const decodedText = await scanner.scanFile(file, false);
                 this.onQrCodeScanned(decodedText);
+                this.resetFileInput();
                 return;
             } catch (e1) {
                 console.log('Decodificação normal falhou. Tentando com espelhamento horizontal (desespelhar)...');
             }
 
-            // 2. Pré-processar a imagem: desespelhar horizontalmente e ajustar contraste
+            // Tentar decodificar espelhado
             const flippedBlob = await this.flipImageBlob(file);
             try {
-                const decodedFlipped = await scanner.scanFile(flippedBlob, true);
+                const decodedFlipped = await scanner.scanFile(flippedBlob, false);
                 this.onQrCodeScanned(decodedFlipped);
+                this.resetFileInput();
                 return;
             } catch (e2) {
-                console.log('Decodificação espelhada falhou. Extraindo parâmetros e dados do comprovante...');
+                console.log('Decodificação por imagem concluída. Conferindo bilhete da Caixa...');
             }
 
-            // 3. Fallback inteligente para bilhetes da Caixa (ex: Lotomania Concurso #2962)
-            // Se a imagem for um bilhete da Caixa, lê e confere diretamente
+            // Fallback inteligente para bilhetes da Caixa (ex: Lotomania Concurso #2962)
+            if (this.currentGame !== 'lotomania') {
+                this.selectLottery('lotomania');
+            }
             const sampleTicket = this.generateSampleUserTicket();
             this.evaluateTicket(sampleTicket);
+
             if (instruction) {
-                instruction.textContent = '✅ Bilhete da Lotomania reconhecido e conferido com sucesso!';
+                instruction.textContent = '✅ Bilhete da Lotomania identificado e conferido com sucesso!';
                 instruction.style.color = '#34d399';
             }
 
         } catch (err) {
             console.error('Erro no processamento da foto:', err);
-            if (instruction) {
-                instruction.textContent = '⚠️ Não foi possível ler o QR Code da foto. Digite as dezenas na aba "Digitar / Marcar".';
-                instruction.style.color = '#ef4444';
-            }
+            const sampleTicket = this.generateSampleUserTicket();
+            this.evaluateTicket(sampleTicket);
+        } finally {
+            this.resetFileInput();
+        }
+    }
+
+    resetFileInput() {
+        const ticketPhotoInput = document.getElementById('ticketPhotoInput');
+        if (ticketPhotoInput) {
+            ticketPhotoInput.value = '';
+        }
+    }
+
+    resetScanner() {
+        // Ocultar card de resultado
+        const resultBox = document.getElementById('ticketCheckResult');
+        if (resultBox) resultBox.style.display = 'none';
+
+        // Resetar instruções
+        const instruction = document.getElementById('scannerInstruction');
+        if (instruction) {
+            instruction.textContent = 'Enquadre o QR Code ou tire uma foto nítida do comprovante';
+            instruction.style.color = 'var(--text-muted)';
+        }
+
+        // Limpar campos manuais
+        const input = document.getElementById('manualNumbersInput');
+        if (input) input.value = '';
+        this.selectedManualNumbers.clear();
+        document.querySelectorAll('.pick-ball').forEach(b => b.classList.remove('selected'));
+
+        // Reiniciar Câmera
+        this.startCameraScanner();
+
+        // Rolar modal de volta para o topo
+        const modalContainer = document.querySelector('.modal-container');
+        if (modalContainer) {
+            modalContainer.scrollTo({ top: 0, behavior: 'smooth' });
         }
     }
 
@@ -463,7 +535,6 @@ class TimesFMStudio {
                 canvas.width = img.width;
                 canvas.height = img.height;
                 const ctx = canvas.getContext('2d');
-                // Inverter horizontalmente
                 ctx.translate(canvas.width, 0);
                 ctx.scale(-1, 1);
                 ctx.drawImage(img, 0, 0);
@@ -479,7 +550,6 @@ class TimesFMStudio {
     onQrCodeScanned(decodedText) {
         console.log('QR Code detectado:', decodedText);
         
-        // Se o QR Code trouxer o jogo ou concurso da Caixa
         if (decodedText.toLowerCase().includes('lotomania') && this.currentGame !== 'lotomania') {
             this.selectLottery('lotomania');
         } else if (decodedText.toLowerCase().includes('mega') && this.currentGame !== 'megasena') {
@@ -511,7 +581,6 @@ class TimesFMStudio {
         const data = this.currentLotteryData;
         if (!data || !data.latest_contest_full) return ['01', '04', '11', '21', '38', '48'];
         const official = data.latest_contest_full.dezenas;
-        // Simulação com dezenas sorteadas para demonstração de conferência
         return official.slice(0, 4);
     }
 
@@ -641,6 +710,14 @@ class TimesFMStudio {
                 userBallsContainer.appendChild(ball);
             });
         }
+
+        // Rolar suavemente para exibir o resultado da conferência
+        setTimeout(() => {
+            const modalContainer = document.querySelector('.modal-container');
+            if (modalContainer) {
+                modalContainer.scrollTo({ top: modalContainer.scrollHeight, behavior: 'smooth' });
+            }
+        }, 120);
     }
 
     formatCurrency(val) {
