@@ -20,7 +20,7 @@ class TimesFMStudio {
     }
 
     bindEvents() {
-        // Seleção de Loterias nas Abas
+        // Seleção de Loterias nas Abas Desktop
         const tabs = document.querySelectorAll('.lottery-tab');
         tabs.forEach(tab => {
             tab.addEventListener('click', () => {
@@ -28,6 +28,25 @@ class TimesFMStudio {
                 this.selectLottery(game);
             });
         });
+
+        // Seleção de Loterias nas Abas Mobile (Bottom Tab Bar)
+        const mobileTabs = document.querySelectorAll('.mobile-tab-btn');
+        mobileTabs.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const game = btn.getAttribute('data-game');
+                this.selectLottery(game);
+            });
+        });
+
+        // Botão Central FAB Scanner no Mobile
+        const mobFabScanner = document.getElementById('mobFabScanner');
+        const scannerModal = document.getElementById('scannerModal');
+        if (mobFabScanner && scannerModal) {
+            mobFabScanner.addEventListener('click', () => {
+                scannerModal.style.display = 'flex';
+                this.initScannerMode('camera');
+            });
+        }
 
         // Toggle da Tabela de Rateio
         const togglePayoutBtn = document.getElementById('togglePayoutBtn');
@@ -149,10 +168,13 @@ class TimesFMStudio {
     selectLottery(gameId) {
         this.currentGame = gameId;
 
-        // Atualizar classes visuais
+        // Atualizar classes visuais nas abas desktop e mobile
         document.body.className = `theme-${gameId}`;
         document.querySelectorAll('.lottery-tab').forEach(tab => {
             tab.classList.toggle('active', tab.getAttribute('data-game') === gameId);
+        });
+        document.querySelectorAll('.mobile-tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.getAttribute('data-game') === gameId);
         });
 
         this.loadLotteryData(gameId);

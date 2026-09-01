@@ -2,34 +2,44 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>TimesFM Studio — Loterias Caixa & Scanner de Bilhetes</title>
+    
+    <!-- PWA & Mobile Native Meta Tags -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="TimesFM Loterias">
+    <meta name="theme-color" content="#070a13">
+    <link rel="manifest" href="/static/manifest.json">
+    
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
+    
     <!-- Chart.js & HTML5 QR Code Scanner via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
     <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 <body class="theme-megasena">
     <div class="app-layout">
-        <!-- Topbar Simplificada e Executiva -->
+        <!-- Topbar Adaptativa (Desktop Widescreen & Mobile Header) -->
         <header class="topbar">
             <div class="brand-group">
                 <div class="brand-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                         <circle cx="12" cy="12" r="10"></circle>
                         <path d="m10 15 5-3-5-3v6z"></path>
                     </svg>
                 </div>
                 <div class="brand-text">
                     <h1>TimesFM <span>Studio</span></h1>
-                    <p class="brand-subtitle">Previsão Google Foundation & Loterias Caixa</p>
+                    <p class="brand-subtitle">Google Research & Loterias Caixa</p>
                 </div>
             </div>
 
-            <!-- Botão de Ação Primária: Scanner de Câmera -->
+            <!-- Ações do Topbar (Visíveis no Desktop) -->
             <div class="topbar-actions">
                 <button class="btn btn-scan" id="openScannerBtn">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -46,11 +56,11 @@
             </div>
         </header>
 
-        <!-- Container Principal com Foco Total na Loteria Selecionada -->
+        <!-- Container Principal -->
         <main class="main-container">
             
-            <!-- Barra Seletora das 4 Loterias -->
-            <nav class="lottery-nav">
+            <!-- Barra Seletora de Loterias no Desktop (No Mobile é substituída pela Bottom Bar) -->
+            <nav class="lottery-nav" id="desktopLotteryNav">
                 <button class="lottery-tab active" data-game="megasena" id="tabMegasena">
                     <span class="tab-badge-icon icon-ms">MS</span>
                     <div class="tab-content">
@@ -84,9 +94,8 @@
                 </button>
             </nav>
 
-            <!-- CARD CENTRAL: Resultado Oficial do Último Concurso -->
+            <!-- CARD 1: Resultado Oficial do Último Concurso -->
             <section class="card result-card">
-                <!-- Cabeçalho Principal com Número do Concurso em Destaque -->
                 <div class="result-header">
                     <div class="contest-highlight">
                         <span class="official-tag">Último Resultado Oficial</span>
@@ -96,7 +105,7 @@
                     
                     <div class="jackpot-box" id="jackpotBox">
                         <span class="jackpot-status" id="jackpotStatus">🔥 ACUMULOU!</span>
-                        <span class="jackpot-title">Estimativa do Próximo Prêmio:</span>
+                        <span class="jackpot-title">Estimativa Próximo Prêmio:</span>
                         <span class="jackpot-amount" id="jackpotAmount">R$ 36.000.000,00</span>
                         <span class="next-contest-date" id="nextContestDate">Próximo Sorteio: 01/09/2026</span>
                     </div>
@@ -107,7 +116,7 @@
                     <div class="balls-title-bar">
                         <span class="balls-heading">Números Sorteados</span>
                         <button class="btn-text" id="togglePayoutBtn">
-                            <span id="payoutBtnText">Ver Detalhes do Rateio</span>
+                            <span id="payoutBtnText">Ver Rateio de Prêmios</span>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <polyline points="6 9 12 15 18 9"></polyline>
                             </svg>
@@ -125,7 +134,7 @@
                         <thead>
                             <tr>
                                 <th>Faixa de Premiação</th>
-                                <th>Número de Ganhadores</th>
+                                <th>Ganhadores</th>
                                 <th>Prêmio por Aposta</th>
                             </tr>
                         </thead>
@@ -145,7 +154,7 @@
                             <span>Google TimesFM Previsor</span>
                         </div>
                         <h3 id="aiSuggestionTitle">Jogo Sugerido para o Concurso #3052</h3>
-                        <p class="ai-subtitle">Modelagem temporal com base nos padrões de frequência, ciclos de atraso e dispersão matemática.</p>
+                        <p class="ai-subtitle">Modelagem temporal com base em frequência histórica, ciclos de atraso e dispersão combinatória.</p>
                     </div>
 
                     <div class="ai-actions">
@@ -175,21 +184,57 @@
                 <!-- Métricas do Jogo Sugerido -->
                 <div class="ai-footer-metrics">
                     <div class="metric-pill">
-                        <span class="pill-label">Distribuição Paridade:</span>
+                        <span class="pill-label">Paridade:</span>
                         <span class="pill-val" id="pillParity">3 Pares / 3 Ímpares</span>
                     </div>
                     <div class="metric-pill">
-                        <span class="pill-label">Soma das Dezenas:</span>
+                        <span class="pill-label">Soma:</span>
                         <span class="pill-val" id="pillSum">145</span>
                     </div>
                     <div class="metric-pill">
-                        <span class="pill-label">Confiança TimesFM:</span>
+                        <span class="pill-label">Confiança:</span>
                         <span class="pill-val highlight" id="pillConfidence">94.8%</span>
                     </div>
                 </div>
             </section>
 
         </main>
+
+        <!-- ============================================== -->
+        <!-- BOTTOM TAB BAR NATIVA PARA CELULAR (MOBILE)    -->
+        <!-- ============================================== -->
+        <nav class="mobile-bottom-bar" id="mobileBottomBar">
+            <button class="mobile-tab-btn active" data-game="megasena" id="mobTabMs">
+                <span class="mob-tab-icon icon-ms">MS</span>
+                <span class="mob-tab-label">Mega-Sena</span>
+            </button>
+
+            <button class="mobile-tab-btn" data-game="quina" id="mobTabQn">
+                <span class="mob-tab-icon icon-qn">QN</span>
+                <span class="mob-tab-label">Quina</span>
+            </button>
+
+            <!-- BOTÃO CENTRAL FLUTUANTE (FAB) SCANNER -->
+            <button class="mobile-fab-scanner" id="mobFabScanner" aria-label="Escanear Bilhete">
+                <div class="fab-scanner-inner">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+                        <circle cx="12" cy="13" r="4"></circle>
+                    </svg>
+                </div>
+                <span class="fab-label">Escanear</span>
+            </button>
+
+            <button class="mobile-tab-btn" data-game="lotofacil" id="mobTabLf">
+                <span class="mob-tab-icon icon-lf">LF</span>
+                <span class="mob-tab-label">Lotofácil</span>
+            </button>
+
+            <button class="mobile-tab-btn" data-game="lotomania" id="mobTabLm">
+                <span class="mob-tab-icon icon-lm">LM</span>
+                <span class="mob-tab-label">Lotomania</span>
+            </button>
+        </nav>
     </div>
 
     <!-- ============================================== -->
@@ -201,8 +246,8 @@
                 <div class="modal-title-group">
                     <div class="scanner-icon-badge">📷</div>
                     <div>
-                        <h3>Scanner & Conferidor de Bilhetes</h3>
-                        <p class="modal-desc">Aponte a câmera para o QR Code do seu comprovante da lotérica ou digite as dezenas.</p>
+                        <h3>Scanner & Conferidor</h3>
+                        <p class="modal-desc">Aponte a câmera para o QR Code do bilhete ou digite as dezenas.</p>
                     </div>
                 </div>
                 <button class="modal-close-btn" id="closeScannerBtn">&times;</button>
@@ -221,7 +266,7 @@
                         <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                         <line x1="9" y1="3" x2="9" y2="21"></line>
                     </svg>
-                    <span>Digitar / Marcar Bilhete</span>
+                    <span>Digitar / Marcar</span>
                 </button>
             </div>
 
@@ -229,20 +274,19 @@
             <div class="scanner-camera-box" id="scannerCameraBox">
                 <div id="cameraReader" class="camera-reader-viewport"></div>
                 <div class="camera-guideline" id="cameraGuideline">
-                    <div class="scanner-reticle"></div>
                     <p class="scanner-instruction">Enquadre o QR Code impresso no comprovante da Caixa</p>
                 </div>
                 <div class="camera-controls">
-                    <button class="btn btn-secondary btn-sm" id="switchCameraBtn">Alternar Câmera (Frente/Trás)</button>
+                    <button class="btn btn-secondary btn-sm" id="switchCameraBtn">Alternar Câmera</button>
                 </div>
             </div>
 
             <!-- ÁREA MANUAL DE DEZENAS -->
             <div class="manual-check-box" id="manualCheckBox" style="display: none;">
-                <p class="manual-hint">Selecione ou digite as dezenas que você jogou no volante:</p>
+                <p class="manual-hint">Selecione ou digite as dezenas jogadas no seu bilhete:</p>
                 <div class="manual-input-group">
                     <input type="text" id="manualNumbersInput" placeholder="Ex: 03, 11, 24, 38, 42, 55" class="custom-input">
-                    <button class="btn btn-primary" id="checkManualGameBtn">Conferir Jogo</button>
+                    <button class="btn btn-primary" id="checkManualGameBtn">Conferir</button>
                 </div>
                 <div class="quick-picker-grid" id="quickPickerGrid">
                     <!-- Gerado dinamicamente para a loteria ativa -->
@@ -254,8 +298,8 @@
                 <div class="result-banner" id="resultBanner">
                     <div class="result-badge-icon" id="resultIcon">🎉</div>
                     <div>
-                        <h4 id="resultTitle">Bilhete Conferido com Sucesso!</h4>
-                        <p id="resultSubtitle">Comparação direta com o último concurso da Caixa.</p>
+                        <h4 id="resultTitle">Bilhete Conferido!</h4>
+                        <p id="resultSubtitle">Comparação com o último concurso oficial.</p>
                     </div>
                 </div>
 
@@ -268,15 +312,15 @@
 
                 <div class="prize-summary-box" id="prizeSummaryBox">
                     <div class="prize-stat">
-                        <span class="stat-label">Total de Acertos</span>
+                        <span class="stat-label">Acertos</span>
                         <span class="stat-val" id="statHits">0</span>
                     </div>
                     <div class="prize-stat">
-                        <span class="stat-label">Faixa Atingida</span>
+                        <span class="stat-label">Faixa</span>
                         <span class="stat-val" id="statFaixa">Nenhuma</span>
                     </div>
                     <div class="prize-stat highlight">
-                        <span class="stat-label">Premiação Estimada</span>
+                        <span class="stat-label">Prêmio Estimado</span>
                         <span class="stat-val prize-color" id="statPrize">R$ 0,00</span>
                     </div>
                 </div>

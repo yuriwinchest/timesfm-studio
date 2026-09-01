@@ -61,6 +61,7 @@ body.theme-lotomania {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
 }
 
 body {
@@ -74,6 +75,7 @@ body {
     line-height: 1.5;
     -webkit-font-smoothing: antialiased;
     min-height: 100vh;
+    padding-top: env(safe-area-inset-top);
 }
 
 .app-layout {
@@ -90,7 +92,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 1rem 2.5rem;
-    background: rgba(14, 21, 38, 0.9);
+    background: rgba(14, 21, 38, 0.92);
     backdrop-filter: blur(16px);
     border-bottom: 1px solid var(--border-color);
     position: sticky;
@@ -101,24 +103,24 @@ body {
 .brand-group {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
 }
 
 .brand-icon {
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     border-radius: var(--radius-sm);
     background: var(--theme-gradient);
     display: flex;
     align-items: center;
     justify-content: center;
     color: #fff;
-    box-shadow: 0 0 20px var(--theme-glow);
+    box-shadow: 0 0 18px var(--theme-glow);
     transition: all 0.3s ease;
 }
 
 .brand-text h1 {
-    font-size: 1.25rem;
+    font-size: 1.2rem;
     font-weight: 800;
     letter-spacing: -0.02em;
     color: #fff;
@@ -130,7 +132,7 @@ body {
 }
 
 .brand-subtitle {
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     color: var(--text-muted);
 }
 
@@ -192,7 +194,7 @@ body {
 }
 
 /* ==========================================
-   CONTAINER PRINCIPAL
+   DESKTOP CONTAINER & NAVEGAÇÃO
    ========================================== */
 .main-container {
     max-width: 1280px;
@@ -204,7 +206,6 @@ body {
     gap: 1.75rem;
 }
 
-/* Barra de Navegação das 4 Loterias */
 .lottery-nav {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -303,10 +304,8 @@ body {
     box-shadow: 0 10px 36px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--border-color);
     overflow: hidden;
     backdrop-filter: blur(14px);
-    transition: border-color 0.3s ease;
 }
 
-/* CARD 1: RESULTADO OFICIAL */
 .result-card {
     border-top: 4px solid var(--theme-color);
 }
@@ -385,7 +384,6 @@ body {
     margin-top: 2px;
 }
 
-/* Seção de Bolas */
 .balls-section {
     padding: 2rem 2.5rem;
 }
@@ -420,12 +418,10 @@ body {
     transition: all 0.2s ease;
 }
 
-.btn-text:hover {
-    background: rgba(56, 189, 248, 0.1);
-}
+.btn-text:hover { background: rgba(56, 189, 248, 0.1); }
 
 /* ==========================================
-   3D LOTTERY BALLS (ESFERAS ILUMINADAS)
+   3D LOTTERY BALLS
    ========================================== */
 .lottery-balls-row {
     display: flex;
@@ -479,7 +475,6 @@ body {
     font-size: 0.85rem;
 }
 
-/* Temas das Bolas */
 .ball-megasena { background: radial-gradient(circle at 35% 30%, #4ade80, #209869 65%, #064e3b); }
 .ball-quina { background: radial-gradient(circle at 35% 30%, #a78bfa, #6a38eb 65%, #2e1065); }
 .ball-lotofacil { background: radial-gradient(circle at 35% 30%, #f472b6, #d63384 65%, #701a75); }
@@ -531,7 +526,7 @@ body {
 .payout-table tr:last-child td { border-bottom: none; }
 .payout-table td.prize-money { color: #34d399; font-weight: 700; }
 
-/* CARD 2: PREVISÃO IA */
+/* AI CARD */
 .ai-card {
     background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(14, 21, 38, 0.7) 100%);
 }
@@ -572,10 +567,7 @@ body {
     margin-top: 2px;
 }
 
-.ai-actions {
-    display: flex;
-    gap: 12px;
-}
+.ai-actions { display: flex; gap: 12px; }
 
 .ai-footer-metrics {
     display: flex;
@@ -664,7 +656,7 @@ body {
 .modal-backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(7, 10, 19, 0.85);
+    background: rgba(7, 10, 19, 0.88);
     backdrop-filter: blur(16px);
     display: flex;
     align-items: center;
@@ -779,18 +771,9 @@ body {
     border: 2px solid var(--border-color);
 }
 
-.camera-guideline {
-    text-align: center;
-    position: relative;
-}
+.camera-guideline { text-align: center; position: relative; }
+.scanner-instruction { font-size: 0.8rem; color: var(--text-muted); margin-top: 6px; }
 
-.scanner-instruction {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-top: 6px;
-}
-
-/* Manual Check Box */
 .manual-check-box {
     padding: 1.25rem 1.75rem;
     display: flex;
@@ -799,11 +782,7 @@ body {
 }
 
 .manual-hint { font-size: 0.82rem; color: var(--text-muted); }
-
-.manual-input-group {
-    display: flex;
-    gap: 8px;
-}
+.manual-input-group { display: flex; gap: 8px; }
 
 .custom-input {
     flex: 1;
@@ -845,11 +824,7 @@ body {
     transition: all 0.15s ease;
 }
 
-.pick-ball:hover {
-    border-color: var(--theme-color);
-    color: #fff;
-}
-
+.pick-ball:hover { border-color: var(--theme-color); color: #fff; }
 .pick-ball.selected {
     background: var(--theme-color);
     border-color: var(--theme-color);
@@ -857,7 +832,6 @@ body {
     box-shadow: 0 0 10px var(--theme-glow);
 }
 
-/* Ticket Check Result */
 .ticket-check-result {
     padding: 1.5rem 1.75rem;
     border-top: 1px solid var(--border-color);
@@ -904,13 +878,209 @@ body {
 .stat-val { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 800; color: #fff; }
 .stat-val.prize-color { color: #34d399; }
 
-/* Responsividade */
-@media (max-width: 900px) {
-    .lottery-nav { grid-template-columns: repeat(2, 1fr); }
-    .result-header { flex-direction: column; align-items: flex-start; gap: 16px; }
-    .jackpot-box { width: 100%; text-align: left; }
-    .ai-header { flex-direction: column; align-items: flex-start; gap: 14px; }
-    .ai-footer-metrics { flex-direction: column; gap: 8px; }
-    .topbar { padding: 0.75rem 1rem; flex-direction: column; gap: 10px; }
-    .main-container { padding: 1rem; }
+/* ==========================================
+   MOBILE BOTTOM BAR (PWA / APP NATIVO)
+   ========================================== */
+.mobile-bottom-bar {
+    display: none; /* Oculto no desktop por padrão */
+}
+
+/* ==========================================
+   REGRAS ESPECÍFICAS DE RESPONSIVIDADE & DUAL-SHELL
+   ========================================== */
+
+/* 📱 QUANDO ACESSADO POR SMARTPHONE OU TABLET (≤ 768px) */
+@media (max-width: 768px) {
+    /* 1. Ocultar elementos desktop */
+    #desktopLotteryNav { display: none !important; }
+    .topbar-actions { display: none !important; }
+
+    /* 2. Topbar Mobile Enxuta e Alinhada */
+    .topbar {
+        padding: 0.85rem 1.25rem;
+        background: rgba(14, 21, 38, 0.95);
+    }
+    .brand-icon { width: 36px; height: 36px; }
+    .brand-text h1 { font-size: 1.05rem; }
+    .brand-subtitle { font-size: 0.68rem; }
+
+    /* 3. Container Principal com espaço para a Bottom Bar */
+    .main-container {
+        padding: 1rem 1rem calc(env(safe-area-inset-bottom) + 90px) 1rem;
+        gap: 1.25rem;
+    }
+
+    /* 4. Cards Verticais de Alto Impacto */
+    .result-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 1.5rem 1.25rem 1rem 1.25rem;
+    }
+    .contest-highlight h2 { font-size: 1.35rem; }
+    .contest-date { font-size: 0.8rem; }
+    .jackpot-box { width: 100%; text-align: left; padding: 12px 14px; }
+    .jackpot-amount { font-size: 1.3rem; }
+
+    .balls-section {
+        padding: 1.5rem 1.25rem;
+    }
+
+    /* 5. Dimensionamento Inteligente das Bolas no Celular */
+    .lottery-balls-row {
+        gap: 8px;
+    }
+    .ball {
+        width: 48px;
+        height: 48px;
+        font-size: 1.15rem;
+    }
+    .ball.compact-size {
+        width: 38px;
+        height: 38px;
+        font-size: 0.92rem;
+    }
+    .ball.mini-size {
+        width: 30px;
+        height: 30px;
+        font-size: 0.75rem;
+    }
+
+    .payout-accordion {
+        padding: 0 1.25rem 1.5rem 1.25rem;
+    }
+
+    .ai-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+        padding: 1.5rem 1.25rem 1rem 1.25rem;
+    }
+    .ai-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    .ai-footer-metrics {
+        flex-direction: column;
+        gap: 8px;
+        padding: 0 1.25rem 1.5rem 1.25rem;
+    }
+
+    /* 6. ATIVAÇÃO DA BOTTOM TAB BAR NATIVA (ESTILO IPHONE / ANDROID) */
+    .mobile-bottom-bar {
+        display: flex !important;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: calc(env(safe-area-inset-bottom) + 68px);
+        padding-bottom: env(safe-area-inset-bottom);
+        background: rgba(14, 21, 38, 0.96);
+        backdrop-filter: blur(20px);
+        border-top: 1px solid rgba(32, 46, 82, 0.8);
+        z-index: 999;
+        align-items: center;
+        justify-content: space-around;
+        box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
+    }
+
+    .mobile-tab-btn {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        padding: 6px 0;
+        transition: all 0.2s ease;
+    }
+
+    .mobile-tab-btn:active {
+        transform: scale(0.9);
+    }
+
+    .mob-tab-icon {
+        width: 28px;
+        height: 28px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: var(--font-mono);
+        font-weight: 800;
+        font-size: 0.75rem;
+        color: #fff;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+        opacity: 0.6;
+        transition: all 0.2s ease;
+    }
+
+    .mob-tab-label {
+        font-size: 0.65rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        transition: color 0.2s ease;
+    }
+
+    .mobile-tab-btn.active .mob-tab-icon {
+        opacity: 1;
+        transform: scale(1.15);
+        box-shadow: 0 0 12px var(--theme-glow);
+    }
+
+    .mobile-tab-btn.active .mob-tab-label {
+        color: #fff;
+        font-weight: 700;
+    }
+
+    /* BOTÃO ELEVADO FLUTUANTE (FAB) SCANNER NO CENTRO DA BOTTOM BAR */
+    .mobile-fab-scanner {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        margin-top: -24px;
+        position: relative;
+    }
+
+    .fab-scanner-inner {
+        width: 52px;
+        height: 52px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #f59e0b, #d97706);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        box-shadow: 0 6px 20px rgba(245, 158, 11, 0.5), inset 0 2px 4px rgba(255, 255, 255, 0.4);
+        transition: transform 0.2s ease;
+    }
+
+    .mobile-fab-scanner:active .fab-scanner-inner {
+        transform: scale(0.92);
+    }
+
+    .fab-label {
+        font-size: 0.65rem;
+        font-weight: 700;
+        color: #fbbf24;
+        margin-top: 3px;
+    }
+
+    /* Modal no Mobile vira Bottom Sheet */
+    .modal-backdrop {
+        align-items: flex-end;
+        padding: 0;
+    }
+    .modal-container {
+        border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
 }

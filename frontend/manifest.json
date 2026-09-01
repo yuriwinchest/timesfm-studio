@@ -1,0 +1,24 @@
+{
+  "name": "TimesFM Loterias",
+  "short_name": "Loterias IA",
+  "description": "Simulador, Previsor Google TimesFM e Scanner de Bilhetes das Loterias Caixa",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#070a13",
+  "theme_color": "#070a13",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
