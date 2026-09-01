@@ -15,39 +15,64 @@ class TimesFMEngine:
     def __init__(self):
         self.model = None
         self.is_loaded = False
-        self.model_name = "google/timesfm-1.0-200m-pytorch"
+        self.model_name = "google/timesfm-2.5-200m-pytorch"
         self.backend = "cpu"
         self.status_message = "Inicializando motor..."
         self._initialize_model()
 
     def _initialize_model(self):
-        """Tenta inicializar o modelo TimesFM real via PyTorch CPU."""
+        """Tenta inicializar o modelo TimesFM real (2.5 ou 1.0) via PyTorch CPU."""
         try:
             import torch
             torch.set_num_threads(MAX_THREADS)
             logger.info(f"PyTorch configurado com {MAX_THREADS} threads de CPU.")
 
             import timesfm
-            logger.info(f"Carregando checkpoint do TimesFM ({self.model_name})...")
             
-            self.model = timesfm.TimesFm(
-                hparams=timesfm.TimesFmHparams(
-                    backend="torch",
-                    per_core_batch_size=1,
-                    horizon_len=128,
-                    context_len=512,
-                ),
-                checkpoint=timesfm.TimesFmCheckpoint(
-                    huggingface_repo_id=self.model_name
-                ),
-            )
-            self.is_loaded = True
-            self.status_message = "Modelo Google TimesFM 200M carregado e pronto (CPU)."
-            logger.info(self.status_message)
+            # 1. Tenta a API do TimesFM 2.5 (Mais recente e eficiente)
+            if hasattr(timesfm, "TimesFM_2p5_200M_torch"):
+                logger.info("Carregando TimesFM 2.5 (200M PyTorch CPU)...")
+                self.model = timesfm.TimesFM_2p5_200M_torch.from_pretrained("google/timesfm-2.5-200m-pytorch")
+                self.model.compile(
+                    timesfm.ForecastConfig(
+                        max_context=512,
+                        max_horizon=128,
+                        normalize_inputs=True,
+                        per_core_batch_size=1
+                    )
+                )
+                self.model_name = "google/timesfm-2.5-200m-pytorch"
+                self.is_loaded = True
+                self.status_message = "Google TimesFM 2.5 (200M PyTorch CPU) carregado e pronto."
+                logger.info(self.status_message)
+                return
+
+            # 2. Tenta a API legado do TimesFM 1.0
+            if hasattr(timesfm, "TimesFm"):
+                logger.info("Carregando TimesFM 1.0 (200M PyTorch CPU)...")
+                self.model = timesfm.TimesFm(
+                    hparams=timesfm.TimesFmHparams(
+                        backend="torch",
+                        per_core_batch_size=1,
+                        horizon_len=128,
+                        context_len=512,
+                    ),
+                    checkpoint=timesfm.TimesFmCheckpoint(
+                        huggingface_repo_id="google/timesfm-1.0-200m-pytorch"
+                    ),
+                )
+                self.model_name = "google/timesfm-1.0-200m-pytorch"
+                self.is_loaded = True
+                self.status_message = "Google TimesFM 1.0 (200M PyTorch CPU) carregado e pronto."
+                logger.info(self.status_message)
+                return
+
+            raise AttributeError("Classe do TimesFM não encontrada no pacote instalado.")
+
         except Exception as e:
             self.is_loaded = False
             self.status_message = f"Modo Analítico/Estatístico ativo (TimesFM real: {str(e)})"
-            logger.warning(f"TimesFM real não carregado diretamente na CPU local. Ativando motor de previsão analítico integrado. Erro: {e}")
+            logger.warning(f"TimesFM real não carregado diretamente na CPU. Ativando motor de previsão analítico integrado. Erro: {e}")
 
     def forecast(
         self,
@@ -69,7 +94,15 @@ class TimesFMEngine:
         # Se o modelo TimesFM real estiver carregado
         if self.is_loaded and self.model is not None:
             try:
-                forecast_result, _ = self.model.forecast([history_arr], freq=[freq])
+                # TimesFM 2.5 API
+                if hasattr(self.model, "forecast"):
+                    try:
+                        forecast_result, _ = self.model.forecast([history_arr])
+                    except TypeError:
+                        forecast_result, _ = self.model.forecast([history_arr], freq=[freq])
+                else:
+                    forecast_result, _ = self.model.forecast([history_arr], freq=[freq])
+
                 if len(forecast_result.shape) == 3:
                     point_forecast = forecast_result[0, :horizon, 0].tolist()
                     if forecast_result.shape[2] >= 3:
@@ -85,7 +118,7 @@ class TimesFMEngine:
                     lower_bound = [max(0.0, v - 1.28 * std) for v in point_forecast]
                     upper_bound = [v + 1.28 * std for v in point_forecast]
 
-                engine_used = "Google TimesFM (PyTorch CPU)"
+                engine_used = f"{self.model_name} (PyTorch CPU)"
             except Exception as ex:
                 logger.error(f"Erro durante inferência com TimesFM: {ex}. Recorrendo ao fallback estatístico.")
                 point_forecast, lower_bound, upper_bound = self._statistical_fallback(history_arr, horizon)
@@ -142,21 +175,17 @@ class TimesFMEngine:
         number_scores = []
         for item in signals["stats"]:
             num_series = item["series"]
-            # Previsão temporal de curto prazo para a dezena
             try:
                 pred = self.forecast(num_series, horizon=3)
                 next_prob = float(pred["forecast"][0])
             except Exception:
                 next_prob = float(np.mean(num_series[-5:]))
 
-            # Fator de calibração: combina tendência prevista + momentum recente + reversão de atraso
             delay_factor = min(1.5, 1.0 + (item["delay"] * 0.03))
             recent_momentum = item["recent_frequency"] / 10.0
             
-            # Score de probabilidade relativa ponderada
             final_score = (next_prob * 0.50) + (recent_momentum * 0.30) + (delay_factor * 0.20)
             
-            # Classificação térmica
             if item["recent_frequency"] >= 3:
                 status = "Quente 🔥"
             elif item["delay"] >= 8:
@@ -174,40 +203,31 @@ class TimesFMEngine:
                 "status": status
             })
 
-        # Ordenar por score de probabilidade decrescente
         sorted_by_score = sorted(number_scores, key=lambda x: x["score"], reverse=True)
         sorted_by_delay = sorted(number_scores, key=lambda x: x["delay"], reverse=True)
         sorted_by_freq = sorted(number_scores, key=lambda x: x["recent_freq"], reverse=True)
 
         # 3. Geração de Combinações Estratégicas
-        
-        # Jogo Principal IA (Equilíbrio de probabilidade + Par/Ímpar)
         main_candidates = [x["number"] for x in sorted_by_score[:draw_count * 2]]
-        # Seleciona de forma balanceada
         np.random.seed(latest_contest["concurso"] + 1)
-        # Amostragem ponderada pelos scores
         sub_scores = np.array([x["score"] for x in sorted_by_score[:draw_count * 2]], dtype=np.float64)
         sub_probs = sub_scores / np.sum(sub_scores)
         main_selected = sorted(np.random.choice(main_candidates, size=draw_count, replace=False, p=sub_probs).tolist())
         main_game_str = [str(n).zfill(format_digits) for n in main_selected]
 
-        # Jogo 2: Estratégia Momentum (Mais Quentes)
         hot_candidates = [x["number"] for x in sorted_by_freq[:draw_count + 5]]
         hot_selected = sorted(np.random.choice(hot_candidates, size=draw_count, replace=False).tolist())
         hot_game_str = [str(n).zfill(format_digits) for n in hot_selected]
 
-        # Jogo 3: Estratégia Reversão de Ciclo (Mais Atrasadas)
         delay_candidates = [x["number"] for x in sorted_by_delay[:draw_count + 5]]
         delay_selected = sorted(np.random.choice(delay_candidates, size=draw_count, replace=False).tolist())
         delay_game_str = [str(n).zfill(format_digits) for n in delay_selected]
 
-        # 4. Comparação com o Último Concurso Real da Caixa (Backtest)
         latest_dezenas = set(latest_contest["dezenas"])
         matched_main = sorted(list(latest_dezenas.intersection(set(main_game_str))))
         
         elapsed_ms = round((time.time() - start_time) * 1000, 2)
 
-        # Métricas de Paridade do Jogo Principal
         evens = sum(1 for n in main_selected if n % 2 == 0)
         odds = draw_count - evens
         sum_numbers = sum(main_selected)
