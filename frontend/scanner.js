@@ -81,6 +81,17 @@ class TicketScannerMixin {
                 () => {}
             );
             this.isScannerRunning = true;
+
+            // Força o vídeo a cobrir 100% da viewport em tela cheia no mobile
+            const videoEl = cameraViewport.querySelector('video');
+            if (videoEl) {
+                videoEl.style.width = '100%';
+                videoEl.style.height = '100%';
+                videoEl.style.objectFit = 'cover';
+                videoEl.style.position = 'absolute';
+                videoEl.style.inset = '0';
+            }
+
             this.setScannerStatus('Enquadre o comprovante e toque no botão circular para fotografar.', 'muted');
         } catch (err) {
             console.warn('Erro ao abrir câmera:', err);

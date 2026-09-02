@@ -1502,14 +1502,42 @@ body {
         margin-top: 3px;
     }
 
-    /* Modal no Mobile vira Bottom Sheet */
-    .modal-backdrop {
+    /* Modais genéricos no mobile viram Bottom Sheet */
+    .modal-backdrop:not(.modal-camera-fullscreen) {
         align-items: flex-end;
         padding: 0;
     }
-    .modal-container {
+    .modal-container:not(.camera-modal-container) {
         border-radius: var(--radius-lg) var(--radius-lg) 0 0;
         max-height: 90vh;
         overflow-y: auto;
+    }
+
+    /* Modal de Câmera Fullscreen no Celular: 100% Tela Cheia Absoluta */
+    .modal-backdrop.modal-camera-fullscreen {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100vw !important;
+        height: 100dvh !important;
+        height: 100vh !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        align-items: stretch !important;
+        justify-content: stretch !important;
+        background: #000 !important;
+        z-index: 100000 !important;
+    }
+
+    .modal-container.camera-modal-container {
+        width: 100vw !important;
+        height: 100dvh !important;
+        height: 100vh !important;
+        max-width: 100vw !important;
+        max-height: 100dvh !important;
+        max-height: 100vh !important;
+        border-radius: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+        overflow: hidden !important;
     }
 }
