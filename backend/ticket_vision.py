@@ -39,8 +39,14 @@ ORIENTATION_ANCHORS = (
     "lotofacil", "mega", "valor", "sena", "federal",
 )
 
-TESS_DIGITS = "--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789"
-TESS_TEXT = "--oem 3 --psm 6"
+# psm 4 = coluna unica com tamanhos de fonte variados, que e exatamente um comprovante.
+# Com psm 6 (bloco uniforme) o Tesseract DESCARTA a linha isolada e grande das dezenas:
+# no comprovante da Quina o texto voltava completo, sem a unica linha que importa.
+TESS_TEXT = "--oem 3 --psm 4"
+
+# Ordem de tentativa quando a leitura nao fecha as regras da modalidade.
+# 6 = bloco uniforme (bom para a grade da Lotomania), 11 = texto esparso.
+TESS_FALLBACKS = ("--oem 3 --psm 6", "--oem 3 --psm 11")
 
 
 class TicketVision:
@@ -198,9 +204,17 @@ class TicketVision:
         rules = BET_SIZE_RULES.get(game_id)
         best_effort: List[str] = []
 
-        for prepared in self._prepare_variants(image):
+        variantes = self._prepare_variants(image)
+
+        # Binarizacao e modo de segmentacao sao tentados em par: a combinacao que ler
+        # uma aposta valida encerra a busca, entao o caso normal custa uma passada so.
+        tentativas = [(variantes[0], TESS_TEXT)]
+        tentativas += [(v, TESS_TEXT) for v in variantes[1:]]
+        tentativas += [(variantes[0], cfg) for cfg in TESS_FALLBACKS]
+
+        for prepared, config in tentativas:
             try:
-                texto = pytesseract.image_to_string(prepared, config=TESS_TEXT)
+                texto = pytesseract.image_to_string(prepared, config=config)
             except Exception as e:
                 logger.warning("Erro no OCR de dezenas: %s", e)
                 continue
