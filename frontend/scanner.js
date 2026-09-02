@@ -22,8 +22,12 @@ class TicketScannerMixin {
             this.startCameraScanner();
         } else {
             if (cameraBox) cameraBox.style.display = 'none';
-            if (manualBox) manualBox.style.display = 'flex';
+            if (manualBox) {
+                manualBox.style.display = 'flex';
+                manualBox.scrollTo({ top: 0, behavior: 'instant' });
+            }
             this.stopCameraScanner();
+            this.setScannerStatus('', 'muted');
             this.renderQuickPickerGrid();
         }
     }
