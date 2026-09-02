@@ -22,6 +22,28 @@ class TimesFMStudio {
     }
 
     bindEvents() {
+        // Seleção de Visão Principal: Resultados vs Palpites com IA
+        const viewModeResults = document.getElementById('viewModeResults');
+        const viewModePredictions = document.getElementById('viewModePredictions');
+        const resultsView = document.getElementById('resultsView');
+        const predictionsView = document.getElementById('predictionsView');
+
+        if (viewModeResults && viewModePredictions) {
+            viewModeResults.addEventListener('click', () => {
+                viewModeResults.classList.add('active');
+                viewModePredictions.classList.remove('active');
+                if (resultsView) resultsView.style.display = 'block';
+                if (predictionsView) predictionsView.style.display = 'none';
+            });
+
+            viewModePredictions.addEventListener('click', () => {
+                viewModePredictions.classList.add('active');
+                viewModeResults.classList.remove('active');
+                if (resultsView) resultsView.style.display = 'none';
+                if (predictionsView) predictionsView.style.display = 'block';
+            });
+        }
+
         // Seleção de Loterias nas Abas Desktop
         const tabs = document.querySelectorAll('.lottery-tab');
         tabs.forEach(tab => {
@@ -63,19 +85,33 @@ class TimesFMStudio {
             });
         }
 
-        // Recalcular Previsão IA
+        // Recalcular Previsão IA TimesFM
         const recalcBtn = document.getElementById('recalcAiBtn');
         if (recalcBtn) {
             recalcBtn.addEventListener('click', () => {
-                this.loadLotteryData(this.currentGame);
+                this.loadLotteryData(this.currentGame, true);
             });
         }
 
-        // Copiar Jogo IA
-        const copyBtn = document.getElementById('copyAiGameBtn');
-        if (copyBtn) {
-            copyBtn.addEventListener('click', () => {
-                this.copyAiGame();
+        // Copiar Jogos de Palpite
+        const copyMainBtn = document.getElementById('copyAiGameBtn');
+        if (copyMainBtn) {
+            copyMainBtn.addEventListener('click', () => {
+                this.copyGameByIndex(0, copyMainBtn);
+            });
+        }
+
+        const copyHotBtn = document.getElementById('copyHotGameBtn');
+        if (copyHotBtn) {
+            copyHotBtn.addEventListener('click', () => {
+                this.copyGameByIndex(1, copyHotBtn);
+            });
+        }
+
+        const copyDelayBtn = document.getElementById('copyDelayGameBtn');
+        if (copyDelayBtn) {
+            copyDelayBtn.addEventListener('click', () => {
+                this.copyGameByIndex(2, copyDelayBtn);
             });
         }
 
@@ -273,12 +309,22 @@ class TimesFMStudio {
         this.loadLotteryData(gameId);
     }
 
-    async loadLotteryData(gameId) {
+    async loadLotteryData(gameId, isRegenerate = false) {
         const drawnBallsRow = document.getElementById('officialDrawnBalls');
         const aiBallsRow = document.getElementById('predictedBallsRow');
+        const hotBallsRow = document.getElementById('hotBallsRow');
+        const delayBallsRow = document.getElementById('delayBallsRow');
+        const recalcBtn = document.getElementById('recalcAiBtn');
 
         if (drawnBallsRow) drawnBallsRow.innerHTML = '<div class="spinner"></div>';
         if (aiBallsRow) aiBallsRow.innerHTML = '<div class="spinner"></div>';
+        if (hotBallsRow) hotBallsRow.innerHTML = '<div class="spinner"></div>';
+        if (delayBallsRow) delayBallsRow.innerHTML = '<div class="spinner"></div>';
+
+        if (isRegenerate && recalcBtn) {
+            recalcBtn.disabled = true;
+            recalcBtn.innerHTML = '<div class="spinner" style="width:16px;height:16px;border-width:2px;"></div><span>Calculando TimesFM...</span>';
+        }
 
         try {
             const res = await fetch('/api/lottery/predict', {
@@ -289,8 +335,6 @@ class TimesFMStudio {
 
             const json = await res.json();
 
-            // 503 = fonte oficial fora do ar. A tela diz isso, em vez de exibir
-            // um resultado fabricado no lugar do sorteio real.
             if (res.status === 503) throw new Error(json.detail || 'A API oficial da Caixa está indisponível no momento.');
             if (!json.success || !json.data) throw new Error(json.detail || 'Falha ao buscar dados');
 
@@ -301,6 +345,16 @@ class TimesFMStudio {
             console.error('Erro ao processar loteria:', e);
             if (drawnBallsRow) drawnBallsRow.innerHTML = `<div style="color: var(--danger)">${e.message}</div>`;
             if (aiBallsRow) aiBallsRow.innerHTML = `<div style="color: var(--text-muted)">Sem análise: ela só existe com histórico oficial da Caixa.</div>`;
+        } finally {
+            if (recalcBtn) {
+                recalcBtn.disabled = false;
+                recalcBtn.innerHTML = `
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+                    </svg>
+                    <span>✨ Gerar Novo Palpite TimesFM</span>
+                `;
+            }
         }
     }
 
@@ -309,7 +363,10 @@ class TimesFMStudio {
         if (!data) return;
 
         const latest = data.latest_contest_full;
-        const mainAiGame = data.suggested_games[0];
+        const games = data.suggested_games || [];
+        const mainAiGame = games[0] || { numbers: [], evens: 0, odds: 0, sum: 0 };
+        const hotGame = games[1] || { numbers: [], evens: 0, odds: 0, sum: 0 };
+        const delayGame = games[2] || { numbers: [], evens: 0, odds: 0, sum: 0 };
 
         // 1. Cabeçalho do Concurso
         const contestTitle = document.getElementById('contestNumberTitle');
@@ -353,51 +410,78 @@ class TimesFMStudio {
             });
         }
 
-        // 4. Card de Previsão IA TimesFM
-        const aiTitle = document.getElementById('aiSuggestionTitle');
+        // 4. Aba de Palpites com IA (TimesFM)
+        const predSectionTitle = document.getElementById('predSectionTitle');
+        const predConfidenceTag = document.getElementById('predConfidenceTag');
         const aiBallsRow = document.getElementById('predictedBallsRow');
-        const pillParity = document.getElementById('pillParity');
-        const pillSum = document.getElementById('pillSum');
-        const pillConf = document.getElementById('pillConfidence');
+        const hotBallsRow = document.getElementById('hotBallsRow');
+        const delayBallsRow = document.getElementById('delayBallsRow');
 
-        if (aiTitle) aiTitle.textContent = `Jogo Sugerido pela IA para o Concurso #${data.target_contest}`;
-        if (pillParity) pillParity.textContent = `${mainAiGame.evens} Pares / ${mainAiGame.odds} Ímpares`;
-        if (pillSum) pillSum.textContent = mainAiGame.sum;
-        if (pillConf) pillConf.textContent = `${data.confidence_score}%`;
-
-        // Transparencia: quantos concursos oficiais sustentam a analise
-        const pillHistory = document.getElementById('pillHistory');
-        if (pillHistory && data.history) {
-            pillHistory.textContent = `${data.history.contests} concursos reais`;
-            pillHistory.title = `Concursos #${data.history.from_contest} a #${data.history.to_contest} — ${data.history.source}`;
+        if (predSectionTitle) {
+            predSectionTitle.textContent = `Palpites Oficiais para o Concurso #${data.target_contest} (${data.game_name})`;
+        }
+        if (predConfidenceTag) {
+            predConfidenceTag.textContent = `Confiança: ${data.confidence_score}%`;
         }
 
+        // Renderiza Bolas do Jogo 1 (Principal)
         if (aiBallsRow) {
-            aiBallsRow.innerHTML = '';
-            const sizeClass = mainAiGame.numbers.length > 15 ? 'mini-size' : (mainAiGame.numbers.length > 6 ? 'compact-size' : '');
+            this.renderBallsList(aiBallsRow, mainAiGame.numbers);
+            const pillParity = document.getElementById('pillParity');
+            const pillSum = document.getElementById('pillSum');
+            if (pillParity) pillParity.textContent = `${mainAiGame.evens}P / ${mainAiGame.odds}I`;
+            if (pillSum) pillSum.textContent = `Soma: ${mainAiGame.sum}`;
+        }
 
-            mainAiGame.numbers.forEach(num => {
-                const ball = document.createElement('div');
-                ball.className = `ball ball-${this.currentGame} ${sizeClass}`;
-                ball.textContent = num;
-                aiBallsRow.appendChild(ball);
-            });
+        // Renderiza Bolas do Jogo 2 (Quentes)
+        if (hotBallsRow) {
+            this.renderBallsList(hotBallsRow, hotGame.numbers);
+            const hotParity = document.getElementById('hotParity');
+            const hotSum = document.getElementById('hotSum');
+            if (hotParity) hotParity.textContent = `${hotGame.evens}P / ${hotGame.odds}I`;
+            if (hotSum) hotSum.textContent = `Soma: ${hotGame.sum}`;
+        }
+
+        // Renderiza Bolas do Jogo 3 (Atrasadas)
+        if (delayBallsRow) {
+            this.renderBallsList(delayBallsRow, delayGame.numbers);
+            const delayParity = document.getElementById('delayParity');
+            const delaySum = document.getElementById('delaySum');
+            if (delayParity) delayParity.textContent = `${delayGame.evens}P / ${delayGame.odds}I`;
+            if (delaySum) delaySum.textContent = `Soma: ${delayGame.sum}`;
         }
     }
 
-    copyAiGame() {
-        const data = this.currentLotteryData;
-        if (!data || !data.suggested_games) return;
+    renderBallsList(container, numbers) {
+        container.innerHTML = '';
+        const sizeClass = numbers.length > 15 ? 'mini-size' : (numbers.length > 6 ? 'compact-size' : '');
 
-        const game = data.suggested_games[0];
-        const text = `${data.game_name} #${data.target_contest}: ${game.numbers.join(' - ')}`;
+        numbers.forEach(num => {
+            const ball = document.createElement('div');
+            ball.className = `ball ball-${this.currentGame} ${sizeClass}`;
+            ball.textContent = num;
+            container.appendChild(ball);
+        });
+    }
+
+    copyGameByIndex(index, btnElement) {
+        const data = this.currentLotteryData;
+        if (!data || !data.suggested_games || !data.suggested_games[index]) return;
+
+        const game = data.suggested_games[index];
+        const text = `${data.game_name} #${data.target_contest} (${game.name}): ${game.numbers.join(' - ')}`;
 
         navigator.clipboard.writeText(text).then(() => {
-            const btnLabel = document.getElementById('copyBtnLabel');
-            if (btnLabel) {
-                const original = btnLabel.textContent;
-                btnLabel.textContent = '✅ Copiado!';
-                setTimeout(() => { btnLabel.textContent = original; }, 2000);
+            if (btnElement) {
+                const original = btnElement.innerHTML;
+                btnElement.innerHTML = '✅ Copiado!';
+                btnElement.style.borderColor = '#10b981';
+                btnElement.style.color = '#34d399';
+                setTimeout(() => {
+                    btnElement.innerHTML = original;
+                    btnElement.style.borderColor = '';
+                    btnElement.style.color = '';
+                }, 2000);
             }
         });
     }

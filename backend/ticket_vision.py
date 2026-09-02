@@ -8,7 +8,7 @@ decide o que aquilo significa e o ticket_scanner.
 
 import logging
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from lottery_rules import BET_SIZE_RULES, NUMBER_RANGE_RULES
 
@@ -18,7 +18,7 @@ try:
     import cv2
     import numpy as np
     CV_AVAILABLE = True
-except ImportError:  # pragma: no cover - depende do ambiente de deploy
+except ImportError:  # pragma: no cover
     CV_AVAILABLE = False
 
 try:
@@ -36,316 +36,264 @@ except ImportError:  # pragma: no cover
 # Termos usados para pontuar a orientacao correta da foto do comprovante.
 ORIENTATION_ANCHORS = (
     "loteria", "caixa", "concurso", "aposta", "lotomania", "quina",
-    "lotofacil", "mega", "valor", "sena", "federal",
+    "lotofacil", "mega", "valor", "sena", "federal", "bilhete", "terminal",
 )
 
 # psm 4 = coluna unica com tamanhos de fonte variados, que e exatamente um comprovante.
-# Com psm 6 (bloco uniforme) o Tesseract DESCARTA a linha isolada e grande das dezenas:
-# no comprovante da Quina o texto voltava completo, sem a unica linha que importa.
 TESS_TEXT = "--oem 3 --psm 4"
-
-# Ordem de tentativa quando a leitura nao fecha as regras da modalidade.
-# 6 = bloco uniforme (bom para a grade da Lotomania), 11 = texto esparso.
-TESS_FALLBACKS = ("--oem 3 --psm 6", "--oem 3 --psm 11")
+TESS_FALLBACKS = ("--oem 3 --psm 6",)
 
 
 class TicketVision:
     """Decodifica, orienta, realca e extrai dezenas posicionadas do comprovante."""
 
     def is_available(self):
-        """Diz, sem eufemismo, se a stack optica esta de pe neste container."""
+        """Diz se a stack optica esta de pe neste container."""
         if not CV_AVAILABLE:
-            return False, "OpenCV nao instalado no container (opencv-python-headless)."
+            return False, "OpenCV nao instalado no container."
         if not OCR_AVAILABLE:
             return False, "pytesseract nao instalado no container."
         try:
             pytesseract.get_tesseract_version()
         except Exception as e:
-            return False, f"Binario do Tesseract indisponivel no sistema: {e}"
+            return False, f"Binario do Tesseract indisponivel: {e}"
         return True, "ok"
 
     def read_qr(self, image) -> Optional[str]:
-        """Tenta decodificar o QR do comprovante com zbar e, em seguida, com OpenCV."""
-        if not CV_AVAILABLE:
+        """Tenta decodificar o QR do comprovante com zbar e OpenCV."""
+        if not CV_AVAILABLE or image is None:
             return None
 
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        candidates = [
-            gray,
-            cv2.resize(gray, None, fx=2.0, fy=2.0, interpolation=cv2.INTER_CUBIC),
-            cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1],
-        ]
+        # Redimensiona para busca rapida de QR
+        h, w = image.shape[:2]
+        target_w = 800
+        if w > target_w:
+            scale = target_w / float(w)
+            small = cv2.resize(image, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+        else:
+            small = image
+
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
 
         if ZBAR_AVAILABLE:
-            for cand in candidates:
-                try:
-                    for code in pyzbar.decode(cand):
-                        payload = code.data.decode("utf-8", errors="replace").strip()
-                        if payload:
-                            logger.info("QR do comprovante decodificado (zbar): %s", payload)
-                            return payload
-                except Exception as e:
-                    logger.debug("Falha zbar: %s", e)
+            try:
+                for code in pyzbar.decode(gray):
+                    payload = code.data.decode("utf-8", errors="replace").strip()
+                    if payload:
+                        logger.info("QR decodificado (zbar): %s", payload)
+                        return payload
+            except Exception as e:
+                logger.debug("Falha zbar: %s", e)
 
         try:
             detector = cv2.QRCodeDetector()
-            for cand in candidates:
-                payload, _, _ = detector.detectAndDecode(cand)
-                if payload:
-                    logger.info("QR do comprovante decodificado (OpenCV): %s", payload)
-                    return payload.strip()
+            payload, _, _ = detector.detectAndDecode(gray)
+            if payload:
+                logger.info("QR decodificado (OpenCV): %s", payload)
+                return payload.strip()
         except Exception as e:
             logger.debug("Falha OpenCV QR: %s", e)
 
         return None
 
-    # ------------------------------------------------------------------
-    # Etapas internas
     def decode(self, image_bytes: bytes):
         try:
             buf = np.frombuffer(image_bytes, dtype=np.uint8)
-            return cv2.imdecode(buf, cv2.IMREAD_COLOR)
+            img = cv2.imdecode(buf, cv2.IMREAD_COLOR)
+            if img is not None:
+                # Normaliza tamanho máximo para evitar exaustão de CPU
+                h, w = img.shape[:2]
+                max_dim = 1600
+                if max(h, w) > max_dim:
+                    scale = max_dim / float(max(h, w))
+                    img = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA)
+            return img
         except Exception as e:
             logger.warning("Erro ao decodificar imagem: %s", e)
             return None
+
     def auto_orient(self, image):
         """
-        Fotos de comprovante chegam de cabeca para baixo, giradas ou espelhadas
-        (preview de webcam). Testamos as 8 orientacoes em baixa resolucao e
-        escolhemos a que produz texto reconhecivel.
+        Orienta a foto do comprovante com teste rapido de curto-circuito.
+        Se a imagem já estiver em pe (0 graus), retorna instantaneamente.
         """
+        # 1. Teste rapido na orientacao atual (0)
+        score_0 = self._orientation_score(image)
+        if score_0 >= 1:
+            logger.info("Comprovante ja esta na orientacao correta (0 graus, score=%s)", score_0)
+            return image, "0"
+
+        # 2. Se nao encontrou palavras na orientacao 0, testa as outras
         variants = {
-            "0": image,
             "180": cv2.rotate(image, cv2.ROTATE_180),
             "90": cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE),
             "270": cv2.rotate(image, cv2.ROTATE_90_COUNTERCLOCKWISE),
+            "0-espelhado": cv2.flip(image, 1),
         }
-        variants.update({f"{k}-espelhado": cv2.flip(v, 1) for k, v in list(variants.items())})
 
-        best_key, best_score, best_img = "0", -1, image
+        best_key, best_score, best_img = "0", score_0, image
         for key, candidate in variants.items():
             score = self._orientation_score(candidate)
             if score > best_score:
                 best_key, best_score, best_img = key, score, candidate
+                if best_score >= 2:
+                    break
 
-        logger.info("Orientacao escolhida para o comprovante: %s (score=%s)", best_key, best_score)
+        logger.info("Orientacao escolhida: %s (score=%s)", best_key, best_score)
         return best_img, best_key
 
     def _orientation_score(self, image) -> int:
-        probe = self._prepare(image, max_width=900)
+        probe = self._prepare(image, max_width=600)
         try:
             text = pytesseract.image_to_string(probe, config=TESS_TEXT).lower()
         except Exception:
             return 0
         return sum(text.count(anchor) for anchor in ORIENTATION_ANCHORS)
-    def _grayscale(self, image, max_width: int = 2000):
+
+    def _grayscale(self, image, max_width: int = 1100):
         """Normaliza escala e contraste antes de qualquer binarizacao."""
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
         width = gray.shape[1]
         if width != max_width and width > 0:
             factor = max_width / float(width)
-            interp = cv2.INTER_CUBIC if factor > 1 else cv2.INTER_AREA
+            interp = cv2.INTER_AREA if factor < 1 else cv2.INTER_CUBIC
             gray = cv2.resize(gray, None, fx=factor, fy=factor, interpolation=interp)
 
-        gray = cv2.bilateralFilter(gray, 7, 60, 60)
-        clahe = cv2.createCLAHE(clipLimit=2.5, tileGridSize=(8, 8))
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
         return clahe.apply(gray)
 
-    def _prepare_variants(self, image, max_width: int = 2000) -> List[Any]:
-        """
-        Gera binarizacoes alternativas do mesmo comprovante.
-
-        Motivo: a linha das dezenas e a maior e mais grossa do bilhete. Um
-        adaptiveThreshold com bloco pequeno cabe inteiro dentro do traco dessa fonte,
-        calcula media igual ao proprio traco e APAGA o numero - some justamente a
-        unica linha que interessa. Otsu global preserva texto grosso; o adaptativo
-        salva papel amassado com sombra. Testamos os dois e ficamos com o que produzir
-        uma aposta valida.
-        """
+    def _prepare_variants(self, image, max_width: int = 1100) -> List[Any]:
         gray = self._grayscale(image, max_width)
-
         otsu = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
-
-        # Bloco proporcional a largura, nunca menor que a altura de uma linha grossa
-        block = max(41, int(gray.shape[1] * 0.04) | 1)
+        block = max(31, int(gray.shape[1] * 0.035) | 1)
         adaptive = cv2.adaptiveThreshold(
-            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, block, 12
+            gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, block, 10
         )
+        return [otsu, adaptive]
 
-        return [otsu, adaptive, gray]
-
-    def _prepare(self, image, max_width: int = 2000):
-        """Variante principal (Otsu), usada na leitura de texto e na orientacao."""
+    def _prepare(self, image, max_width: int = 1100):
         return self._prepare_variants(image, max_width)[0]
 
-    def ocr(self, image, config: str) -> str:
+    def ocr(self, image, config: str = TESS_TEXT) -> str:
         try:
-            prepared = self._prepare(image)
+            prepared = self._prepare(image, max_width=1100)
             return pytesseract.image_to_string(prepared, config=config)
         except Exception as e:
             logger.warning("Erro no OCR: %s", e)
             return ""
-    def extract_numbers(self, image, game_id: Optional[str]) -> List[str]:
+
+    def extract_numbers_and_games(self, image, game_id: Optional[str]) -> Tuple[List[str], List[List[str]], str]:
         """
-        Extrai as dezenas apostadas lendo o comprovante LINHA A LINHA.
-
-        A primeira versao tentava separar aposta de ruido por geometria (altura do
-        digito, folga entre numeros). Rodando com Tesseract real sobre comprovantes
-        que reproduzem os bilhetes fisicos, isso leu 27 dezenas numa Quina de 5: o
-        codigo da aposta impresso no rodape virou uma fileira de numeros plausiveis.
-
-        O comprovante entrega uma pista muito mais forte que geometria: a linha da
-        aposta e a UNICA composta apenas por numeros de dois digitos. Todo o resto
-        carrega letra ou simbolo junto - "CONC 2971", "TOTAL R$ 3,00", "01SET2026
-        HORA DF 14:46:23", "E. LOTERICO 04.007703-9" - e o codigo do rodape e uma
-        sequencia continua longa, que nunca se parte em pares de dois digitos.
+        Extrai em uma única passagem rápida tanto os números quanto os jogos do bilhete.
         """
         rules = BET_SIZE_RULES.get(game_id)
-        best_effort: List[str] = []
+        baixo, alto = NUMBER_RANGE_RULES.get(game_id or "megasena", (0, 99))
+        variantes = self._prepare_variants(image, max_width=1100)
 
-        variantes = self._prepare_variants(image)
+        best_numbers: List[str] = []
+        best_games: List[List[str]] = []
+        best_raw_text: str = ""
 
-        # Binarizacao e modo de segmentacao sao tentados em par: a combinacao que ler
-        # uma aposta valida encerra a busca, entao o caso normal custa uma passada so.
-        tentativas = [(variantes[0], TESS_TEXT)]
-        tentativas += [(v, TESS_TEXT) for v in variantes[1:]]
-        tentativas += [(variantes[0], cfg) for cfg in TESS_FALLBACKS]
-
-        for prepared, config in tentativas:
+        for prepared in variantes:
             try:
-                texto = pytesseract.image_to_string(prepared, config=config)
+                texto = pytesseract.image_to_string(prepared, config=TESS_TEXT)
             except Exception as e:
                 logger.warning("Erro no OCR de dezenas: %s", e)
                 continue
 
-            numeros = self._numbers_from_lines(texto, game_id)
-            if rules and rules[0] <= len(numeros) <= rules[1]:
-                return numeros
+            if len(texto) > len(best_raw_text):
+                best_raw_text = texto
 
-            if len(numeros) > len(best_effort):
-                best_effort = numeros
+            # Extração dos jogos por linhas
+            games = []
+            for bruta in texto.splitlines():
+                tokens = self._bet_line_tokens(bruta, baixo, alto)
+                if tokens:
+                    deduped = self._dedupe(tokens)
+                    if rules and rules[0] <= len(deduped) <= rules[1]:
+                        games.append(deduped)
 
-        return best_effort
+            numbers = self._numbers_from_lines(texto, game_id)
+            if rules and rules[0] <= len(numbers) <= rules[1]:
+                return numbers, games or [numbers], texto
+
+            if len(numbers) > len(best_numbers):
+                best_numbers = numbers
+                best_games = games
+
+        if not best_games and best_numbers:
+            best_games = [best_numbers]
+
+        return best_numbers, best_games, best_raw_text
+
+    def extract_numbers(self, image, game_id: Optional[str]) -> List[str]:
+        numbers, _, _ = self.extract_numbers_and_games(image, game_id)
+        return numbers
 
     def extract_games(self, image, game_id: Optional[str]) -> List[List[str]]:
-        """Extrai os jogos individuais impressos no comprovante (ex: Jogo A e Jogo B)."""
-        rules = BET_SIZE_RULES.get(game_id)
-        baixo, alto = NUMBER_RANGE_RULES.get(game_id or "megasena", (0, 99))
-        variantes = self._prepare_variants(image)
-
-        for prepared, config in [(variantes[0], TESS_TEXT), (variantes[1], TESS_TEXT)]:
-            try:
-                texto = pytesseract.image_to_string(prepared, config=config)
-                games = []
-                for bruta in texto.splitlines():
-                    tokens = self._bet_line_tokens(bruta, baixo, alto)
-                    if tokens:
-                        deduped = self._dedupe(tokens)
-                        if rules and rules[0] <= len(deduped) <= rules[1]:
-                            games.append(deduped)
-                if games:
-                    return games
-            except Exception:
-                continue
-        return []
+        _, games, _ = self.extract_numbers_and_games(image, game_id)
+        return games
 
     def _numbers_from_lines(self, texto: str, game_id: Optional[str]) -> List[str]:
-        """Junta as linhas que contem exclusivamente dezenas da modalidade."""
         baixo, alto = NUMBER_RANGE_RULES.get(game_id or "megasena", (0, 99))
-
         linhas_de_aposta = []
         for bruta in texto.splitlines():
             tokens = self._bet_line_tokens(bruta, baixo, alto)
-            linhas_de_aposta.append(tokens)
-
-        # Preferimos o bloco contiguo da grade impressa; se ele nao fechar as regras
-        # da modalidade, quem decide e o conjunto completo de linhas de aposta.
-        blocos = []
-        atual = []
-        for tokens in linhas_de_aposta:
             if tokens:
-                atual.append(tokens)
-            elif atual:
-                blocos.append(atual)
-                atual = []
-        if atual:
-            blocos.append(atual)
+                linhas_de_aposta.append(tokens)
 
-        if not blocos:
+        if not linhas_de_aposta:
             return []
 
         rules = BET_SIZE_RULES.get(game_id)
-        todas = [tokens for bloco in blocos for tokens in bloco]
-        candidatos = [sum(todas, [])]                       # todas as linhas de aposta
-        candidatos += [sum(b, []) for b in sorted(blocos, key=len, reverse=True)]
+        todas = sum(linhas_de_aposta, [])
+        dezenas = self._dedupe(todas)
+        if rules and rules[0] <= len(dezenas) <= rules[1]:
+            return dezenas
 
-        for candidato in candidatos:
-            dezenas = self._dedupe(candidato)
-            if rules and rules[0] <= len(dezenas) <= rules[1]:
-                return dezenas
+        # Se houver múltiplas linhas, verifica se alguma linha individual fecha a regra
+        for linha in linhas_de_aposta:
+            d = self._dedupe(linha)
+            if rules and rules[0] <= len(d) <= rules[1]:
+                return d
 
-        return self._dedupe(sum(max(blocos, key=len), []))
+        return dezenas
 
     def _bet_line_tokens(self, linha: str, baixo: int, alto: int) -> List[str]:
-        """
-        Devolve as dezenas da linha, ou vazio se ela nao for uma linha de aposta.
-
-        Aceita o marcador da aposta ("A", "B") e os colchetes da Lotomania ("[01]").
-        Recusa qualquer linha com letra, simbolo ou numero que nao seja de 2 digitos:
-        e isso que descarta data, hora, valor, CNPJ do loterico e codigo do rodape.
-        """
         limpa = linha.replace("[", " ").replace("]", " ").replace("|", " ").strip()
         if not limpa:
             return []
 
         tokens = limpa.split()
-
-        # Marcador da aposta no inicio da linha ("A", "B", e variacoes que o OCR
-        # produz sobre ele). Curto e nao numerico: nunca engole uma dezena.
-        if tokens and len(tokens[0]) <= 2 and not tokens[0].isdigit():
-            tokens = tokens[1:]
-
-        if len(tokens) < 2:
+        if not tokens:
             return []
 
+        # Remove marcador de aposta (ex: "A", "B", "C")
+        if len(tokens[0]) == 1 and tokens[0].isalpha():
+            tokens = tokens[1:]
+
         dezenas = []
-        for token in tokens:
-            corrigido = self._repair_digits(token)
-            if not re.fullmatch(r"\d{2}", corrigido):
+        for t in tokens:
+            digits = re.sub(r"\D", "", t)
+            if len(digits) == 1:
+                digits = digits.zfill(2)
+            if len(digits) == 2 and digits.isdigit():
+                val = int(digits)
+                if baixo <= val <= alto:
+                    dezenas.append(digits)
+            else:
                 return []
-            if not (baixo <= int(corrigido) <= alto):
-                return []
-            dezenas.append(corrigido)
 
         return dezenas
 
-    # Confusoes classicas do OCR em papel termico. Aplicadas so em token de 2
-    # caracteres: uma letra solta no meio da aposta continua invalidando a linha.
-    _TROCAS = {"O": "0", "o": "0", "D": "0", "Q": "0",
-               "I": "1", "l": "1", "i": "1",
-               "S": "5", "s": "5", "B": "8", "Z": "2", "z": "2", "G": "6"}
-
-    def _repair_digits(self, token: str) -> str:
-        if len(token) == 2:
-            return "".join(self._TROCAS.get(c, c) for c in token)
-
-        # Marca espuria grudada na dezena: o OCR devolve "O05" onde esta impresso "05".
-        # So descartamos o primeiro caractere quando ele e letra e sobram dois digitos -
-        # um numero de tres digitos legitimo nunca e dezena de loteria.
-        if len(token) == 3 and token[0].isalpha() and token[1:].isdigit():
-            return token[1:]
-
-        return token
-
-    def _dedupe(self, numeros: List[str]) -> List[str]:
-        vistos = set()
-        saida = []
-        for numero in numeros:
-            if numero not in vistos:
-                vistos.add(numero)
-                saida.append(numero)
-        return saida
+    def _dedupe(self, tokens: List[str]) -> List[str]:
+        seen = set()
+        out = []
+        for t in tokens:
+            if t not in seen:
+                seen.add(t)
+                out.append(t)
+        return sorted(out, key=int)
 
 
 ticket_vision = TicketVision()

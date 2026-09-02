@@ -57,22 +57,23 @@ class TicketScanner:
 
         qr_payload = self.vision.read_qr(image)
         oriented, orientation = self.vision.auto_orient(image)
-        text = self.vision.ocr(oriented, TESS_TEXT)
-
+        
+        # Leitura de dezenas e jogos
+        numbers, games, text = self.vision.extract_numbers_and_games(oriented, hint_game)
+        
         detected = self._detect_game(text)
         game_id = detected or hint_game
         contest = self._detect_contest(text) or self._contest_from_qr(qr_payload)
-        numbers = self.vision.extract_numbers(oriented, game_id)
+
+        # Se a modalidade detectada for diferente da dica, reavalia as dezenas
+        if detected and detected != hint_game:
+            numbers, games, _ = self.vision.extract_numbers_and_games(oriented, detected)
 
         valid, validation_msg = self._validate(numbers, game_id)
-        games = self.vision.extract_games(oriented, game_id) if hasattr(self.vision, "extract_games") else []
         if not games and numbers:
             games = [numbers]
 
-        # A deducao so entra quando o logo NAO foi lido. Deixa-la sobrepor o logo
-        # impresso produziu um erro grave em teste: as 50 dezenas de uma Lotomania,
-        # filtradas pela faixa da Lotofacil (01-25), sobraram exatamente 15 e passaram
-        # como aposta valida de outra modalidade. O que esta impresso manda.
+        # A deducao so entra quando o logo NAO foi lido.
         if not valid and not detected:
             deduced = self._deduce_game(oriented, skip=game_id)
             if deduced:
@@ -195,9 +196,10 @@ class TicketScanner:
             "game_id": None,
             "contest": None,
             "numbers": [],
+            "games": [],
             "qr_payload": None,
             "needs_confirmation": True,
-            "orientation": None,
+            "orientation": "0",
             "raw_text": "",
         }
 

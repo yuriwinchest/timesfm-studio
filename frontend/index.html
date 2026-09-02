@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=2.6.0">
+    <link rel="stylesheet" href="/static/style.css?v=2.7.0">
     
     <!-- Chart.js & HTML5 QR Code Scanner via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -59,7 +59,7 @@
         <!-- Container Principal -->
         <main class="main-container">
             
-            <!-- Barra Seletora de Loterias no Desktop (No Mobile é substituída pela Bottom Bar) -->
+            <!-- Barra Seletora de Loterias no Desktop (No Mobile é sincronizada com a Bottom Bar) -->
             <nav class="lottery-nav" id="desktopLotteryNav">
                 <button class="lottery-tab active" data-game="megasena" id="tabMegasena">
                     <span class="tab-badge-icon icon-ms">MS</span>
@@ -94,113 +94,176 @@
                 </button>
             </nav>
 
-            <!-- CARD 1: Resultado Oficial do Último Concurso -->
-            <section class="card result-card">
-                <div class="result-header">
-                    <div class="contest-highlight">
-                        <span class="official-tag">Último Resultado Oficial</span>
-                        <h2 id="contestNumberTitle">MEGA-SENA — CONCURSO #3051</h2>
-                        <p class="contest-date" id="contestDateText">Sorteio realizado em 30/08/2026 • Espaço da Sorte (São Paulo, SP)</p>
-                    </div>
-                    
-                    <div class="jackpot-box" id="jackpotBox">
-                        <span class="jackpot-status" id="jackpotStatus">🔥 ACUMULOU!</span>
-                        <span class="jackpot-title">Estimativa Próximo Prêmio:</span>
-                        <span class="jackpot-amount" id="jackpotAmount">R$ 36.000.000,00</span>
-                        <span class="next-contest-date" id="nextContestDate">Próximo Sorteio: 01/09/2026</span>
-                    </div>
-                </div>
+            <!-- SELETOR DE ABA / VISÃO PRINCIPAL (RESULTADOS VS PALPITES IA) -->
+            <div class="view-mode-bar">
+                <button class="view-mode-pill active" id="viewModeResults">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                    <span>Resultados & Sorteios</span>
+                </button>
+                <button class="view-mode-pill" id="viewModePredictions">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span>Palpites com IA (TimesFM)</span>
+                </button>
+            </div>
 
-                <!-- Esferas Oficiais Sorteadas -->
-                <div class="balls-section">
-                    <div class="balls-title-bar">
-                        <span class="balls-heading">Números Sorteados</span>
-                        <button class="btn-text" id="togglePayoutBtn">
-                            <span id="payoutBtnText">Ver Rateio de Prêmios</span>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <polyline points="6 9 12 15 18 9"></polyline>
-                            </svg>
-                        </button>
-                    </div>
-
-                    <div class="lottery-balls-row" id="officialDrawnBalls">
-                        <div class="spinner"></div>
-                    </div>
-                </div>
-
-                <!-- Tabela Expansível de Rateio da Caixa -->
-                <div class="payout-accordion" id="payoutAccordion" style="display: none;">
-                    <table class="payout-table">
-                        <thead>
-                            <tr>
-                                <th>Faixa de Premiação</th>
-                                <th>Ganhadores</th>
-                                <th>Prêmio por Aposta</th>
-                            </tr>
-                        </thead>
-                        <tbody id="payoutTableBody">
-                            <!-- Injetado dinamicamente -->
-                        </tbody>
-                    </table>
-                </div>
-            </section>
-
-            <!-- CARD 2: Previsão & Jogo Sugerido pelo TimesFM para o Próximo Concurso -->
-            <section class="card ai-card">
-                <div class="ai-header">
-                    <div class="ai-header-left">
-                        <div class="ai-badge">
-                            <span class="ai-sparkle">✨</span>
-                            <span>Google TimesFM Previsor</span>
+            <!-- ============================================== -->
+            <!-- VISÃO 1: RESULTADOS OFICIAIS DA CAIXA           -->
+            <!-- ============================================== -->
+            <div id="resultsView" class="view-content-wrapper">
+                <!-- CARD: Resultado Oficial do Último Concurso -->
+                <section class="card result-card">
+                    <div class="result-header">
+                        <div class="contest-highlight">
+                            <span class="official-tag">Último Resultado Oficial</span>
+                            <h2 id="contestNumberTitle">MEGA-SENA — CONCURSO #3051</h2>
+                            <p class="contest-date" id="contestDateText">Sorteio realizado em 30/08/2026 • Espaço da Sorte (São Paulo, SP)</p>
                         </div>
-                        <h3 id="aiSuggestionTitle">Jogo Sugerido para o Concurso #3052</h3>
-                        <p class="ai-subtitle">Modelagem temporal com base em frequência histórica, ciclos de atraso e dispersão combinatória.</p>
+                        
+                        <div class="jackpot-box" id="jackpotBox">
+                            <span class="jackpot-status" id="jackpotStatus">🔥 ACUMULOU!</span>
+                            <span class="jackpot-title">Estimativa Próximo Prêmio:</span>
+                            <span class="jackpot-amount" id="jackpotAmount">R$ 36.000.000,00</span>
+                            <span class="next-contest-date" id="nextContestDate">Próximo Sorteio: 01/09/2026</span>
+                        </div>
                     </div>
 
-                    <div class="ai-actions">
-                        <button class="btn btn-outline" id="recalcAiBtn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <!-- Esferas Oficiais Sorteadas -->
+                    <div class="balls-section">
+                        <div class="balls-title-bar">
+                            <span class="balls-heading">Números Sorteados</span>
+                            <button class="btn-text" id="togglePayoutBtn">
+                                <span id="payoutBtnText">Ver Rateio de Prêmios</span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+
+                        <div class="lottery-balls-row" id="officialDrawnBalls">
+                            <div class="spinner"></div>
+                        </div>
+                    </div>
+
+                    <!-- Tabela Expansível de Rateio da Caixa -->
+                    <div class="payout-accordion" id="payoutAccordion" style="display: none;">
+                        <table class="payout-table">
+                            <thead>
+                                <tr>
+                                    <th>Faixa de Premiação</th>
+                                    <th>Ganhadores</th>
+                                    <th>Prêmio por Aposta</th>
+                                </tr>
+                            </thead>
+                            <tbody id="payoutTableBody">
+                                <!-- Injetado dinamicamente -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+
+            <!-- ============================================== -->
+            <!-- VISÃO 2: PALPITES INTELIGENTES (TIMESFM IA)    -->
+            <!-- ============================================== -->
+            <div id="predictionsView" class="view-content-wrapper" style="display: none;">
+                <section class="card predictions-main-card">
+                    <div class="pred-header-bar">
+                        <div class="pred-header-info">
+                            <div class="ai-badge">
+                                <span class="ai-sparkle">✨</span>
+                                <span>Google TimesFM Previsor Zero-Shot</span>
+                            </div>
+                            <h3 id="predSectionTitle">Palpites Estatísticos & Neurais</h3>
+                            <p class="ai-subtitle" id="predSectionSubtitle">Modelagem temporal sobre os últimos 60 concursos da Caixa com ciclos de atraso e dispersão.</p>
+                        </div>
+
+                        <button class="btn btn-primary btn-generate-pred" id="recalcAiBtn">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
                                 <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
                             </svg>
-                            <span>Gerar Novo Jogo</span>
-                        </button>
-                        <button class="btn btn-primary" id="copyAiGameBtn">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-                            </svg>
-                            <span id="copyBtnLabel">Copiar Jogo</span>
+                            <span>✨ Gerar Novo Palpite TimesFM</span>
                         </button>
                     </div>
-                </div>
 
-                <!-- Bolas do Jogo Sugerido -->
-                <div class="balls-section">
-                    <div class="lottery-balls-row" id="predictedBallsRow">
-                        <div class="spinner"></div>
-                    </div>
-                </div>
+                    <!-- GRID DOS 3 JOGOS ESTRATÉGICOS GERADOS -->
+                    <div class="predictions-games-grid" id="predictionsGamesGrid">
+                        <!-- Card Jogo Principal -->
+                        <div class="pred-game-box featured">
+                            <div class="pred-game-top">
+                                <div class="pred-game-tag highlight">🏆 Palpite Principal TimesFM</div>
+                                <div class="pred-game-score" id="predConfidenceTag">Confiança: 95.8%</div>
+                            </div>
+                            <p class="pred-game-desc">Equilíbrio probabilístico de alta densidade temporal e dispersão combinatória.</p>
+                            
+                            <div class="lottery-balls-row compact" id="predictedBallsRow">
+                                <div class="spinner"></div>
+                            </div>
 
-                <!-- Métricas do Jogo Sugerido -->
-                <div class="ai-footer-metrics">
-                    <div class="metric-pill">
-                        <span class="pill-label">Paridade:</span>
-                        <span class="pill-val" id="pillParity">3 Pares / 3 Ímpares</span>
+                            <div class="pred-game-footer">
+                                <div class="pred-mini-metrics">
+                                    <span class="mini-metric" id="pillParity">3P / 3I</span>
+                                    <span class="mini-metric" id="pillSum">Soma: 145</span>
+                                </div>
+                                <button class="btn btn-outline btn-sm btn-copy-game" id="copyAiGameBtn">
+                                    📋 Copiar Jogo
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Card Jogo Momentum (Quentes) -->
+                        <div class="pred-game-box">
+                            <div class="pred-game-top">
+                                <div class="pred-game-tag hot">🔥 Jogo Dezenas Quentes</div>
+                                <div class="pred-game-score">Alta Frequência</div>
+                            </div>
+                            <p class="pred-game-desc">Prioriza as dezenas que mais foram sorteadas nos últimos 10 concursos.</p>
+                            
+                            <div class="lottery-balls-row compact" id="hotBallsRow">
+                                <div class="spinner"></div>
+                            </div>
+
+                            <div class="pred-game-footer">
+                                <div class="pred-mini-metrics">
+                                    <span class="mini-metric" id="hotParity">—</span>
+                                    <span class="mini-metric" id="hotSum">—</span>
+                                </div>
+                                <button class="btn btn-outline btn-sm btn-copy-game" id="copyHotGameBtn">
+                                    📋 Copiar Jogo
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Card Jogo Ciclos Atrasados -->
+                        <div class="pred-game-box">
+                            <div class="pred-game-top">
+                                <div class="pred-game-tag delay">⏳ Jogo Reversão de Ciclo</div>
+                                <div class="pred-game-score">Dezenas Atrasadas</div>
+                            </div>
+                            <p class="pred-game-desc">Focado em números com grande tempo de atraso estatístico para reversão à média.</p>
+                            
+                            <div class="lottery-balls-row compact" id="delayBallsRow">
+                                <div class="spinner"></div>
+                            </div>
+
+                            <div class="pred-game-footer">
+                                <div class="pred-mini-metrics">
+                                    <span class="mini-metric" id="delayParity">—</span>
+                                    <span class="mini-metric" id="delaySum">—</span>
+                                </div>
+                                <button class="btn btn-outline btn-sm btn-copy-game" id="copyDelayGameBtn">
+                                    📋 Copiar Jogo
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div class="metric-pill">
-                        <span class="pill-label">Soma:</span>
-                        <span class="pill-val" id="pillSum">145</span>
-                    </div>
-                    <div class="metric-pill">
-                        <span class="pill-label">Base:</span>
-                        <span class="pill-val" id="pillHistory">—</span>
-                    </div>
-                    <div class="metric-pill">
-                        <span class="pill-label">Confiança:</span>
-                        <span class="pill-val highlight" id="pillConfidence">94.8%</span>
-                    </div>
-                </div>
-            </section>
+                </section>
+            </div>
 
         </main>
 
@@ -443,7 +506,7 @@
         </div>
     </div>
 
-    <script src="/static/scanner.js?v=2.6.0"></script>
-    <script src="/static/app.js?v=2.6.0"></script>
+    <script src="/static/scanner.js?v=2.7.0"></script>
+    <script src="/static/app.js?v=2.7.0"></script>
 </body>
 </html>
