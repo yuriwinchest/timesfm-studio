@@ -883,53 +883,83 @@ body {
 
 @media (min-width: 768px) {
     .modal-backdrop.modal-camera-fullscreen {
-        padding: 24px;
-        background: rgba(0, 0, 0, 0.85);
-        backdrop-filter: blur(16px);
+        padding: 20px;
+        background: rgba(0, 0, 0, 0.88);
+        backdrop-filter: blur(20px);
     }
 
     .modal-container.camera-modal-container {
-        width: 94vw;
-        max-width: 960px;
-        height: 90dvh;
-        max-height: 860px;
-        border-radius: 24px;
-        border: 1px solid rgba(255, 255, 255, 0.16);
-        box-shadow: 0 25px 80px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        width: 96vw;
+        max-width: 1180px;
+        height: 92dvh;
+        max-height: 920px;
+        border-radius: 28px;
+        border: 1px solid rgba(255, 255, 255, 0.18);
+        box-shadow: 0 30px 100px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(255, 255, 255, 0.1);
         background: #080d1a;
     }
 
     .manual-check-box {
-        padding: 85px 36px 30px 36px;
+        padding: 85px 44px 34px 44px;
+    }
+
+    .manual-input-group {
+        gap: 12px;
+    }
+
+    .manual-input-group .custom-input {
+        font-size: 1.05rem;
+        padding: 12px 18px;
+    }
+
+    .manual-input-group .btn {
+        padding: 12px 28px;
+        font-size: 1rem;
+        white-space: nowrap;
     }
 
     .quick-picker-grid {
-        grid-template-columns: repeat(16, 1fr);
-        max-height: 320px;
-        gap: 8px;
+        grid-template-columns: repeat(10, 1fr);
+        max-height: 480px;
+        gap: 10px;
+        padding: 12px 4px;
+    }
+
+    .pick-ball {
+        width: 44px;
+        height: 44px;
+        font-size: 0.92rem;
     }
 
     .ticket-check-result {
-        border-top-left-radius: 24px;
-        border-top-right-radius: 24px;
-        padding: 24px 36px max(env(safe-area-inset-bottom), 24px) 36px;
+        border-top-left-radius: 28px;
+        border-top-right-radius: 28px;
+        padding: 28px 44px max(env(safe-area-inset-bottom), 28px) 44px;
         max-height: 94%;
     }
 
     .recent-draws-grid {
         grid-template-columns: repeat(2, 1fr);
+        gap: 16px;
     }
 }
 
 @media (min-width: 1200px) {
     .modal-container.camera-modal-container {
-        max-width: 1040px;
-        max-height: 880px;
+        max-width: 1240px;
+        max-height: 940px;
     }
 
     .quick-picker-grid {
-        grid-template-columns: repeat(20, 1fr);
-        max-height: 360px;
+        grid-template-columns: repeat(10, 1fr);
+        max-height: 520px;
+        gap: 12px;
+    }
+
+    .pick-ball {
+        width: 48px;
+        height: 48px;
+        font-size: 1rem;
     }
 }
 
