@@ -120,6 +120,17 @@ def source_status():
         "diretorio_cache": lottery_history.cache_dir or "(nenhum gravavel)",
     }
 
+@app.get("/api/lottery/source-probe")
+def source_probe():
+    """
+    Testa varias formas de falar com a Caixa e diz qual atravessa o bloqueio.
+
+    A VPS recebe 403 em ~20ms enquanto a mesma chamada funciona de fora dela. Sem
+    terminal na maquina, e o proprio servidor que precisa medir as alternativas.
+    """
+    from lottery_probe import executar
+    return executar()
+
 @app.get("/api/lottery/games")
 def get_lottery_games():
     """Retorna a lista de modalidades de loteria suportadas."""
