@@ -7,6 +7,7 @@ decide o que aquilo significa e o ticket_scanner.
 """
 
 import logging
+import re
 from typing import Any, Dict, List, Optional
 
 from lottery_rules import BET_SIZE_RULES, NUMBER_RANGE_RULES

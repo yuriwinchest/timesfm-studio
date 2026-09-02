@@ -28,6 +28,15 @@ jobs:
           python -m py_compile backend/ticket_vision.py
           python -m py_compile backend/lottery_rules.py
 
+      - name: Instalar stack optica para o teste de leitura
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends tesseract-ocr libzbar0
+          pip install --quiet numpy opencv-python-headless pytesseract pyzbar
+
+      - name: Teste de fumaca - leitura de comprovante
+        run: python backend/tests/smoke_scan.py
+
   deploy:
     name: Deploy to Hostinger VPS
     needs: validate
