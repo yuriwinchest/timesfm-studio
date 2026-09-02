@@ -74,13 +74,14 @@ class TicketScannerMixin {
                 () => {}
             );
             this.isScannerRunning = true;
+            this.setScannerStatus('Enquadre o bilhete no visor e toque em 📸 Capturar e Ler o Bilhete', 'muted');
         } catch (err) {
             console.warn('Erro ao abrir câmera:', err);
             const secure = window.isSecureContext;
             this.setScannerStatus(
                 secure
-                    ? '💡 Câmera indisponível. Clique em "📸 Tirar Foto / Enviar Foto do Bilhete" para usar a câmera nativa em alta resolução.'
-                    : '🔒 A câmera exige HTTPS. Acesse o site pelo domínio seguro ou use "📸 Tirar Foto / Enviar Foto do Bilhete".',
+                    ? '💡 Câmera indisponível. Use "🖼️ Enviar Foto do Arquivo" para mandar uma foto do bilhete.'
+                    : '🔒 A câmera exige HTTPS. Acesse pelo domínio seguro ou use "🖼️ Enviar Foto do Arquivo".',
                 'warn'
             );
         }
@@ -95,6 +96,40 @@ class TicketScannerMixin {
                 console.warn('Erro ao pausar scanner:', e);
             }
         }
+    }
+
+    /**
+     * Congela o quadro atual da câmera ao vivo e manda para o OCR.
+     * É o caminho do desktop: no computador o input de arquivo abre um seletor,
+     * não a câmera, então sem isto não existe como capturar o bilhete pelo navegador.
+     */
+    async captureFromCamera() {
+        const video = document.querySelector('#cameraReader video');
+        if (!video || !video.videoWidth) {
+            this.setScannerStatus('⚠️ Câmera ainda não está pronta. Aguarde a imagem aparecer e tente de novo.', 'warn');
+            return;
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+
+        // Desfaz o espelhamento se o usuário ativou o modo espelho no visor
+        if (this.isMirrored) {
+            ctx.translate(canvas.width, 0);
+            ctx.scale(-1, 1);
+        }
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.95));
+        if (!blob) {
+            this.setScannerStatus('⚠️ Não consegui capturar o quadro da câmera.', 'warn');
+            return;
+        }
+
+        console.info(`Quadro capturado da câmera: ${canvas.width}x${canvas.height}px`);
+        await this.processUploadedPhoto(blob);
     }
 
     /**
@@ -123,7 +158,7 @@ class TicketScannerMixin {
 
         try {
             const form = new FormData();
-            form.append('file', file);
+            form.append('file', file, file.name || 'bilhete.jpg');
             form.append('game_id', this.currentGame);
 
             const res = await fetch('/api/lottery/scan-ticket', { method: 'POST', body: form });
@@ -244,7 +279,8 @@ class TicketScannerMixin {
         this.hideConfirmBox();
 
         // Resetar instruções
-        this.setScannerStatus('Tire uma foto nítida do comprovante para ler as dezenas', 'muted');
+        this.lastQrPayload = null;
+        this.setScannerStatus('Enquadre o bilhete no visor e toque em 📸 Capturar e Ler o Bilhete', 'muted');
 
         // Limpar campos manuais
         const input = document.getElementById('manualNumbersInput');
@@ -268,8 +304,10 @@ class TicketScannerMixin {
      * Por isso o fluxo correto é: leu o QR -> pede a foto para o OCR ler as dezenas.
      */
     async onQrCodeScanned(decodedText) {
+        // Não para a câmera: o QR é só um bônus, quem lê as dezenas é a captura da foto.
+        if (this.lastQrPayload === decodedText) return;
+        this.lastQrPayload = decodedText;
         console.info('Payload bruto do QR do comprovante:', decodedText);
-        await this.stopCameraScanner();
 
         const contest = this.extractContestFromQr(decodedText);
         const gameId = this.detectGameFromText(decodedText);
@@ -280,8 +318,8 @@ class TicketScannerMixin {
 
         this.setScannerStatus(
             contest
-                ? `✅ QR lido (Concurso #${contest}). Ele não carrega as dezenas: tire a foto do bilhete ou marque as dezenas.`
-                : '✅ QR lido, mas ele não carrega as dezenas apostadas. Tire a foto do bilhete ou marque as dezenas.',
+                ? `✅ QR lido (Concurso #${contest}). O QR não traz as dezenas — toque em 📸 Capturar para lê-las.`
+                : '✅ QR lido, mas ele não traz as dezenas apostadas — toque em 📸 Capturar para lê-las.',
             'warn'
         );
     }

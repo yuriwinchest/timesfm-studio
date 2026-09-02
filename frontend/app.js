@@ -139,6 +139,14 @@ class TimesFMStudio {
             });
         }
 
+        // Botão principal: congela o quadro da câmera e manda para o OCR
+        const captureFrameBtn = document.getElementById('captureFrameBtn');
+        if (captureFrameBtn) {
+            captureFrameBtn.addEventListener('click', () => {
+                this.captureFromCamera();
+            });
+        }
+
         // Botão Tirar / Carregar Foto HD do Bilhete
         const triggerPhotoBtn = document.getElementById('triggerPhotoBtn');
         const ticketPhotoInput = document.getElementById('ticketPhotoInput');

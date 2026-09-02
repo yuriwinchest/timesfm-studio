@@ -230,12 +230,34 @@ class TicketScanner:
             return ""
 
     def _detect_game(self, text: str) -> Optional[str]:
+        """
+        Escolhe a modalidade por contagem de ocorrencias, nao pela primeira que aparece.
+
+        O comprovante traz texto promocional de outras loterias ("concorra tambem na
+        Mega-Sena", "Mega da Virada"). Devolver a primeira palavra encontrada faria um
+        bilhete de Quina ser conferido como Mega-Sena. A modalidade real e a que se
+        repete (logo, cabecalho e rodape), nao a citada de passagem.
+        """
         normalized = text.lower().replace(" ", "")
+
+        scores = {}
         for game_id, keywords in GAME_KEYWORDS.items():
-            for kw in keywords:
-                if kw.replace(" ", "") in normalized:
-                    return game_id
-        return None
+            total = sum(normalized.count(kw.replace(" ", "")) for kw in keywords)
+            if total:
+                scores[game_id] = total
+
+        if not scores:
+            return None
+
+        best = max(scores.values())
+        winners = [g for g, c in scores.items() if c == best]
+
+        # Empate real: nao ha como decidir com honestidade, deixa o usuario escolher.
+        if len(winners) > 1:
+            logger.info("Modalidade ambigua no comprovante: %s", scores)
+            return None
+
+        return winners[0]
 
     def _detect_contest(self, text: str) -> Optional[int]:
         match = re.search(r"concurso\D{0,12}(\d{3,5})", text, flags=re.IGNORECASE)
