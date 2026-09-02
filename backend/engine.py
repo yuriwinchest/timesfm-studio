@@ -169,6 +169,7 @@ class TimesFMEngine:
         # 1. Consulta o último concurso oficial e histórico
         latest_contest = lottery_service.fetch_latest_contest(game_id)
         history_draws = lottery_service.fetch_historical_draws(game_id, count=60)
+        oldest_contest = latest_contest["concurso"] - len(history_draws) + 1
         signals = lottery_service.calculate_lottery_signals(game_id, history_draws)
         
         # 2. Processa as séries temporais de cada número
@@ -238,6 +239,13 @@ class TimesFMEngine:
             "target_contest": latest_contest["concurso"] + 1,
             "engine": "Google TimesFM (Zero-Shot Temporal)",
             "inference_time_ms": elapsed_ms,
+            # Transparencia da base: quantos concursos REAIS sustentam a analise.
+            "history": {
+                "contests": len(history_draws),
+                "from_contest": oldest_contest,
+                "to_contest": latest_contest["concurso"],
+                "source": "API Oficial Loterias Caixa (sorteio a sorteio)"
+            },
             "confidence_score": round(float(np.mean([x["score"] for x in sorted_by_score[:draw_count]]) * 100), 1),
             "suggested_games": [
                 {

@@ -11,10 +11,14 @@ services:
       - MAX_CPU_THREADS=2
       - PORT=8100
       - HF_HOME=/home/appuser/.cache/huggingface
+      - LOTTERY_CACHE_DIR=/app/cache
     volumes:
       - ./hf_cache:/home/appuser/.cache/huggingface
       - ./frontend:/app/frontend:ro
       - ./backend:/app/backend:ro
+      # Historico oficial da Caixa: concurso sorteado e imutavel, entao o cache
+      # sobrevive a deploys e evita rebuscar centenas de concursos a cada subida.
+      - ./lottery_cache:/app/cache
     deploy:
       resources:
         limits:

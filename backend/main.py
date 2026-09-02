@@ -1,6 +1,8 @@
 import os
 import io
 import time
+import logging
+import threading
 import pandas as pd
 import numpy as np
 from typing import List, Optional, Dict, Any
@@ -11,7 +13,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from engine import engine
-from lottery_service import lottery_service, LOTTERY_CONFIGS
+from lottery_service import lottery_service, LotteryUnavailable, LOTTERY_CONFIGS
 from ticket_scanner import ticket_scanner
 from ticket_checker import check_ticket
 
@@ -57,6 +59,29 @@ class TicketCheckRequest(BaseModel):
     numbers: List[str] = Field(..., min_length=1, max_length=60, description="Dezenas apostadas no bilhete")
     contest: Optional[int] = Field(default=None, ge=1, le=99999, description="Numero do concurso; vazio usa o ultimo")
 
+@app.on_event("startup")
+def aquecer_historico_oficial():
+    """
+    Baixa o historico real da Caixa em segundo plano assim que o servidor sobe.
+
+    Sem isso, o primeiro visitante de cada modalidade espera os ~5s da busca concurso
+    a concurso. Como sorteio ja realizado nunca muda, esse custo e pago uma unica vez
+    e o cache em disco atravessa deploys.
+    """
+    def aquecer():
+        log = logging.getLogger("startup")
+        for indice, game_id in enumerate(LOTTERY_CONFIGS):
+            if indice:
+                # Espaco entre modalidades: varrer as quatro em rajada provoca 429 na Caixa
+                time.sleep(20)
+            try:
+                total = len(lottery_service.fetch_historical_draws(game_id, count=60))
+                log.info("Historico de %s pronto: %d concursos reais", game_id, total)
+            except Exception as e:
+                log.warning("Historico de %s adiado: %s", game_id, e)
+
+    threading.Thread(target=aquecer, name="aquecer-historico", daemon=True).start()
+
 @app.get("/api/health")
 def health_check():
     """Retorna o status de integridade do servidor e do modelo."""
@@ -90,6 +115,8 @@ def get_lottery_info(game_id: str):
             "success": True,
             "data": data
         }
+    except LotteryUnavailable as lu:
+        raise HTTPException(status_code=503, detail=str(lu))
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
@@ -104,6 +131,8 @@ def get_lottery_contest(game_id: str, contest_number: int):
             "success": True,
             "data": data
         }
+    except LotteryUnavailable as lu:
+        raise HTTPException(status_code=503, detail=str(lu))
     except ValueError as ve:
         raise HTTPException(status_code=404, detail=str(ve))
     except Exception as e:
@@ -118,6 +147,8 @@ def predict_lottery(payload: LotteryPredictRequest):
             "success": True,
             "data": result
         }
+    except LotteryUnavailable as lu:
+        raise HTTPException(status_code=503, detail=str(lu))
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))
     except Exception as e:

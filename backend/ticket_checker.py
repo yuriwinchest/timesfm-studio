@@ -9,7 +9,7 @@ import logging
 import re
 from typing import Any, Dict, List, Optional
 
-from lottery_service import LOTTERY_CONFIGS, lottery_service
+from lottery_service import LOTTERY_CONFIGS, LotteryUnavailable, lottery_service
 from lottery_rules import BET_SIZE_RULES, NUMBER_RANGE_RULES
 
 logger = logging.getLogger("ticket-checker")
@@ -76,7 +76,10 @@ def check_ticket(game_id: str, raw_numbers: List[Any], contest_number: Optional[
 
     if contest_number:
         requested = int(contest_number)
-        contest = lottery_service.fetch_contest_by_number(game_id, requested)
+        try:
+            contest = lottery_service.fetch_contest_by_number(game_id, requested)
+        except LotteryUnavailable as e:
+            raise ValueError(str(e)) from e
 
         # O fetch cai para o ultimo concurso quando a Caixa nao devolve o pedido, o que
         # acontece com bilhete de sorteio que ainda nao ocorreu. Conferir contra outro

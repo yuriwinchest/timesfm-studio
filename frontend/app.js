@@ -261,6 +261,10 @@ class TimesFMStudio {
             });
 
             const json = await res.json();
+
+            // 503 = fonte oficial fora do ar. A tela diz isso, em vez de exibir
+            // um resultado fabricado no lugar do sorteio real.
+            if (res.status === 503) throw new Error(json.detail || 'A API oficial da Caixa está indisponível no momento.');
             if (!json.success || !json.data) throw new Error(json.detail || 'Falha ao buscar dados');
 
             this.currentLotteryData = json.data;
@@ -268,7 +272,8 @@ class TimesFMStudio {
 
         } catch (e) {
             console.error('Erro ao processar loteria:', e);
-            if (drawnBallsRow) drawnBallsRow.innerHTML = `<div style="color: var(--danger)">Erro: ${e.message}</div>`;
+            if (drawnBallsRow) drawnBallsRow.innerHTML = `<div style="color: var(--danger)">${e.message}</div>`;
+            if (aiBallsRow) aiBallsRow.innerHTML = `<div style="color: var(--text-muted)">Sem análise: ela só existe com histórico oficial da Caixa.</div>`;
         }
     }
 
@@ -332,6 +337,13 @@ class TimesFMStudio {
         if (pillParity) pillParity.textContent = `${mainAiGame.evens} Pares / ${mainAiGame.odds} Ímpares`;
         if (pillSum) pillSum.textContent = mainAiGame.sum;
         if (pillConf) pillConf.textContent = `${data.confidence_score}%`;
+
+        // Transparencia: quantos concursos oficiais sustentam a analise
+        const pillHistory = document.getElementById('pillHistory');
+        if (pillHistory && data.history) {
+            pillHistory.textContent = `${data.history.contests} concursos reais`;
+            pillHistory.title = `Concursos #${data.history.from_contest} a #${data.history.to_contest} — ${data.history.source}`;
+        }
 
         if (aiBallsRow) {
             aiBallsRow.innerHTML = '';

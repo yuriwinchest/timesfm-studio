@@ -71,6 +71,10 @@ jobs:
             mkdir -p hf_cache
             chmod -R 777 hf_cache
 
+            # Cache do historico oficial da Caixa (container roda como uid 1001)
+            mkdir -p lottery_cache
+            chmod -R 777 lottery_cache
+
             # Subir ou recriar containers Docker isolados com limites de CPU e RAM
             echo "Subindo container Docker isolado..."
             docker compose down || true

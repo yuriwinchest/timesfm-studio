@@ -6,8 +6,18 @@ import urllib.error
 from typing import Dict, Any, List, Optional
 import numpy as np
 
+from lottery_history import lottery_history
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("lottery-service")
+
+
+class LotteryUnavailable(RuntimeError):
+    """A Caixa nao respondeu e nao existe dado real em cache para servir.
+
+    Levantada no lugar de devolver resultado fabricado: e melhor a tela dizer que a
+    fonte oficial esta fora do ar do que o apostador ver um sorteio que nunca houve.
+    """
 
 # Configurações das modalidades de loteria
 LOTTERY_CONFIGS = {
@@ -99,17 +109,32 @@ class LotteryService:
 
             parsed = self._parse_caixa_response(game_id, raw_data)
             self.cache[game_id] = {"data": parsed, "timestamp": now}
+            lottery_history.save_latest(game_id, parsed)
             return parsed
 
         except Exception as e:
-            logger.warning(f"Erro ao consultar API da Caixa para {game_id}: {e}. Utilizando dados de contingência.")
-            # Se houver cache antigo, retorna ele
+            logger.warning(f"Erro ao consultar API da Caixa para {game_id}: {e}")
+
+            # Cache vencido ainda e dado REAL: melhor servir resultado oficial antigo,
+            # devidamente marcado, do que inventar um sorteio.
             if cached:
-                return cached["data"]
-            # Fallback estruturado de contingência
-            fallback = self._generate_fallback_latest(game_id)
-            self.cache[game_id] = {"data": fallback, "timestamp": now}
-            return fallback
+                stale = dict(cached["data"])
+                stale["origem"] = "Ultimo resultado oficial em cache (Caixa indisponivel agora)"
+                return stale
+
+            # Ultimo recurso ainda REAL: o resultado oficial gravado em disco na
+            # ultima consulta bem-sucedida, exibido com a origem declarada.
+            from_disk = lottery_history.load_latest(game_id)
+            if from_disk:
+                from_disk = dict(from_disk)
+                from_disk["origem"] = "Ultimo resultado oficial gravado (Caixa indisponivel agora)"
+                self.cache[game_id] = {"data": from_disk, "timestamp": now}
+                return from_disk
+
+            raise LotteryUnavailable(
+                f"A API oficial da Caixa nao respondeu para {LOTTERY_CONFIGS[game_id]['name']} "
+                f"e nao ha resultado real em cache. Nenhum dado sera exibido no lugar."
+            ) from e
 
     def fetch_contest_by_number(self, game_id: str, contest_number: int) -> Dict[str, Any]:
         """Consulta um concurso específico pelo seu número diretamente na API oficial da Caixa."""
@@ -139,11 +164,25 @@ class LotteryService:
                 raw_data = json.loads(payload)
 
             parsed = self._parse_caixa_response(game_id, raw_data)
+
+            # Concurso ainda nao sorteado volta 200 com corpo vazio, sem levantar erro.
+            # Sem esta guarda, o bilhete seria conferido contra dezenas inexistentes.
+            if not parsed.get("dezenas") or int(parsed.get("concurso") or 0) != int(contest_number):
+                raise LotteryUnavailable(
+                    f"O concurso {contest_number} da {config['name']} ainda nao foi divulgado "
+                    f"pela Caixa. Guarde o bilhete e confira apos o sorteio."
+                )
+
             self.cache[cache_key] = {"data": parsed, "timestamp": time.time()}
             return parsed
+        except LotteryUnavailable:
+            raise
         except Exception as e:
             logger.warning(f"Erro ao consultar concurso {contest_number} da {game_id} na Caixa: {e}")
-            return self.fetch_latest_contest(game_id)
+            raise LotteryUnavailable(
+                f"O concurso {contest_number} da {LOTTERY_CONFIGS[game_id]['name']} nao foi "
+                f"devolvido pela Caixa. Pode ainda nao ter sido sorteado."
+            ) from e
 
     def _parse_caixa_response(self, game_id: str, raw: Dict[str, Any]) -> Dict[str, Any]:
         config = LOTTERY_CONFIGS[game_id]
@@ -180,33 +219,34 @@ class LotteryService:
             "origem": "API Oficial Loterias Caixa (Tempo Real)"
         }
 
+    MIN_HISTORY = 10
+
     def fetch_historical_draws(self, game_id: str, count: int = 50) -> List[List[int]]:
         """
-        Retorna matriz histórica de dezenas sorteadas nos últimos concursos.
-        Gera séries temporais com estatísticas paramétricas consistentes e ancoradas no último concurso real.
+        Retorna os sorteios REAIS dos ultimos concursos, do mais antigo ao mais recente.
+
+        Antes esta funcao gerava a serie com np.random.choice e semente fixa, mantendo
+        apenas o ultimo concurso verdadeiro. O modelo estava lendo ruido inventado. Agora
+        cada concurso vem da API oficial da Caixa (ver lottery_history.py) e o que nao
+        vier simplesmente nao entra: serie menor e honesta em vez de serie cheia e falsa.
         """
         config = LOTTERY_CONFIGS[game_id]
-        total_num = config["total_numbers"]
-        draw_count = config["draw_count"]
-        start_num = config["start_number"]
-
         latest = self.fetch_latest_contest(game_id)
-        latest_dezenas = [int(x) for x in latest["dezenas"]]
 
-        concurso_num = latest.get("concurso", 3000)
-        np.random.seed(concurso_num)
+        draws = lottery_history.draws(
+            game_id=game_id,
+            endpoint=config["api_endpoint"],
+            latest_contest=int(latest.get("concurso") or 0),
+            count=count,
+        )
 
-        draws = []
-        for i in range(count - 1):
-            chosen = sorted(np.random.choice(
-                np.arange(start_num, start_num + total_num),
-                size=draw_count,
-                replace=False
-            ).tolist())
-            draws.append(chosen)
+        if len(draws) < self.MIN_HISTORY:
+            raise LotteryUnavailable(
+                f"So consegui {len(draws)} concursos reais de {config['name']} na Caixa e a "
+                f"analise exige ao menos {self.MIN_HISTORY}. Nao vou preencher a serie com "
+                f"dados inventados - tente novamente em instantes."
+            )
 
-        # Adiciona o último concurso real no final da série
-        draws.append(latest_dezenas)
         return draws
 
     def calculate_lottery_signals(self, game_id: str, draws: List[List[int]]) -> Dict[str, Any]:
@@ -264,92 +304,5 @@ class LotteryService:
             "stats": number_stats,
             "matrix": matrix
         }
-
-    def _generate_fallback_latest(self, game_id: str) -> Dict[str, Any]:
-        config = LOTTERY_CONFIGS[game_id]
-        if game_id == "megasena":
-            return {
-                "game_id": "megasena",
-                "game_name": "Mega-Sena",
-                "concurso": 3051,
-                "data_apuracao": "30/08/2026",
-                "dezenas": ["11", "15", "20", "21", "38", "48"],
-                "acumulou": True,
-                "proximo_concurso": 3052,
-                "data_proximo_concurso": "01/09/2026",
-                "valor_estimado_proximo": 36000000.00,
-                "valor_arrecadado": 48865248.00,
-                "local_sorteio": "ESPAÇO DA SORTE",
-                "municipio_sorteio": "SÃO PAULO, SP",
-                "rateio": [
-                    {"faixa": 1, "descricao": "6 acertos", "ganhadores": 0, "premio": 0.0},
-                    {"faixa": 2, "descricao": "5 acertos", "ganhadores": 35, "premio": 55635.04},
-                    {"faixa": 3, "descricao": "4 acertos", "ganhadores": 2706, "premio": 1186.14}
-                ],
-                "origem": "Cache Local de Contingência"
-            }
-        elif game_id == "quina":
-            return {
-                "game_id": "quina",
-                "game_name": "Quina",
-                "concurso": 7105,
-                "data_apuracao": "30/08/2026",
-                "dezenas": ["02", "33", "41", "48", "78"],
-                "acumulou": True,
-                "proximo_concurso": 7106,
-                "data_proximo_concurso": "01/09/2026",
-                "valor_estimado_proximo": 12500000.00,
-                "valor_arrecadado": 11450000.00,
-                "local_sorteio": "ESPAÇO DA SORTE",
-                "municipio_sorteio": "SÃO PAULO, SP",
-                "rateio": [
-                    {"faixa": 1, "descricao": "5 acertos", "ganhadores": 0, "premio": 0.0},
-                    {"faixa": 2, "descricao": "4 acertos", "ganhadores": 62, "premio": 7430.12},
-                    {"faixa": 3, "descricao": "3 acertos", "ganhadores": 4890, "premio": 89.50}
-                ],
-                "origem": "Cache Local de Contingência"
-            }
-        elif game_id == "lotofacil":
-            return {
-                "game_id": "lotofacil",
-                "game_name": "Lotofácil",
-                "concurso": 3775,
-                "data_apuracao": "30/08/2026",
-                "dezenas": ["01", "04", "05", "06", "08", "10", "11", "12", "13", "15", "17", "18", "19", "23", "25"],
-                "acumulou": False,
-                "proximo_concurso": 3776,
-                "data_proximo_concurso": "01/09/2026",
-                "valor_estimado_proximo": 1700000.00,
-                "valor_arrecadado": 21850000.00,
-                "local_sorteio": "ESPAÇO DA SORTE",
-                "municipio_sorteio": "SÃO PAULO, SP",
-                "rateio": [
-                    {"faixa": 1, "descricao": "15 acertos", "ganhadores": 2, "premio": 845210.35},
-                    {"faixa": 2, "descricao": "14 acertos", "ganhadores": 312, "premio": 1620.40},
-                    {"faixa": 3, "descricao": "13 acertos", "ganhadores": 9540, "premio": 30.00}
-                ],
-                "origem": "Cache Local de Contingência"
-            }
-        else: # lotomania
-            return {
-                "game_id": "lotomania",
-                "game_name": "Lotomania",
-                "concurso": 2970,
-                "data_apuracao": "30/08/2026",
-                "dezenas": ["00", "13", "15", "21", "25", "38", "40", "47", "55", "56", "57", "58", "62", "68", "70", "75", "84", "86", "90", "99"],
-                "acumulou": True,
-                "proximo_concurso": 2971,
-                "data_proximo_concurso": "01/09/2026",
-                "valor_estimado_proximo": 6500000.00,
-                "valor_arrecadado": 7450000.00,
-                "local_sorteio": "ESPAÇO DA SORTE",
-                "municipio_sorteio": "SÃO PAULO, SP",
-                "rateio": [
-                    {"faixa": 1, "descricao": "20 acertos", "ganhadores": 0, "premio": 0.0},
-                    {"faixa": 2, "descricao": "19 acertos", "ganhadores": 4, "premio": 64320.10},
-                    {"faixa": 3, "descricao": "18 acertos", "ganhadores": 58, "premio": 2780.50}
-                ],
-                "origem": "Cache Local de Contingência"
-            }
 
 lottery_service = LotteryService()
