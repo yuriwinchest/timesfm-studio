@@ -59,24 +59,21 @@ class TicketScannerMixin {
                 }
             });
 
+            const isMobile = window.innerWidth <= 768;
+            const ratio = isMobile ? (window.innerHeight / window.innerWidth) : (16 / 9);
+
             const config = {
-                fps: 15,
-                qrbox: (viewfinderWidth, viewfinderHeight) => {
-                    return {
-                        width: Math.floor(viewfinderWidth * 0.9),
-                        height: Math.floor(viewfinderHeight * 0.85)
-                    };
-                },
-                aspectRatio: 0.76, // Formato Retrato / Vertical (como celular)
+                fps: 24,
+                aspectRatio: ratio,
                 videoConstraints: {
-                    facingMode: this.currentCameraFacing,
-                    width: { ideal: 1080 },
-                    height: { ideal: 1920 }
+                    facingMode: this.currentCameraFacing || "environment",
+                    width: { ideal: 1920, min: 1080 },
+                    height: { ideal: 1080, min: 720 }
                 }
             };
 
             await this.html5QrCode.start(
-                { facingMode: this.currentCameraFacing },
+                { facingMode: this.currentCameraFacing || "environment" },
                 config,
                 (decodedText) => {
                     this.onQrCodeScanned(decodedText);
@@ -84,14 +81,14 @@ class TicketScannerMixin {
                 () => {}
             );
             this.isScannerRunning = true;
-            this.setScannerStatus('Posicione o comprovante no visor e toque em "Tirar Foto da Câmera"', 'muted');
+            this.setScannerStatus('Enquadre o comprovante e toque no botão circular para fotografar.', 'muted');
         } catch (err) {
             console.warn('Erro ao abrir câmera:', err);
             const secure = window.isSecureContext;
             this.setScannerStatus(
                 secure
-                    ? '💡 Câmera em espera. Toque em "Escolher Foto da Galeria / Arquivo" para enviar o bilhete.'
-                    : '🔒 A câmera exige HTTPS. Acesse pelo domínio seguro ou escolha a foto da galeria.',
+                    ? '💡 Toque em "Galeria" para escolher uma foto do bilhete.'
+                    : '🔒 Câmera requer HTTPS. Toque em "Galeria" para enviar foto.',
                 'warn'
             );
         }

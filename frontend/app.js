@@ -135,7 +135,8 @@ class TimesFMStudio {
                 if (cameraViewport) {
                     cameraViewport.classList.toggle('mirrored', this.isMirrored);
                 }
-                flipMirrorBtn.textContent = this.isMirrored ? '↔️ Modo Normal' : '↔️ Desespelhar (Inverter)';
+                flipMirrorBtn.classList.toggle('active', this.isMirrored);
+                flipMirrorBtn.title = this.isMirrored ? 'Modo Normal (Espelhado)' : 'Desespelhar (Inverter)';
             });
         }
 
