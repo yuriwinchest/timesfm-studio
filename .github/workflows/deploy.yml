@@ -25,6 +25,8 @@ jobs:
           python -m py_compile backend/lottery_service.py
           python -m py_compile backend/ticket_scanner.py
           python -m py_compile backend/ticket_checker.py
+          python -m py_compile backend/ticket_vision.py
+          python -m py_compile backend/lottery_rules.py
 
   deploy:
     name: Deploy to Hostinger VPS
