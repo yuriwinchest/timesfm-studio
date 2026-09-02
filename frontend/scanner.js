@@ -250,10 +250,45 @@ class TicketScannerMixin {
 
     setScannerStatus(message, tone = 'info') {
         const instruction = document.getElementById('scannerInstruction');
-        if (!instruction) return;
-        const colors = { info: '#38bdf8', warn: '#fbbf24', ok: '#34d399', muted: 'var(--text-muted)' };
-        instruction.textContent = message;
-        instruction.style.color = colors[tone] || colors.muted;
+        if (instruction) {
+            const colors = { info: '#38bdf8', warn: '#fbbf24', ok: '#34d399', muted: 'var(--text-muted)' };
+            instruction.textContent = message;
+            instruction.style.color = colors[tone] || colors.muted;
+        }
+
+        const manualStatus = document.getElementById('manualStatusMsg');
+        if (manualStatus) {
+            if (message) {
+                manualStatus.textContent = message;
+                manualStatus.className = `manual-status-box ${tone}`;
+                manualStatus.style.display = 'block';
+            } else {
+                manualStatus.style.display = 'none';
+            }
+        }
+    }
+
+    setManualGame(gameId) {
+        this.currentGame = gameId;
+        document.querySelectorAll('.manual-game-pill').forEach(p => {
+            p.classList.toggle('active', p.getAttribute('data-manual-game') === gameId);
+        });
+
+        // Re-renderiza o volante com os números e limites corretos da modalidade
+        this.renderQuickPickerGrid();
+
+        // Atualiza placeholder orientativo
+        const input = document.getElementById('manualNumbersInput');
+        if (input) {
+            const placeholders = {
+                megasena: 'Ex: 04 12 28 35 44 58 (Mínimo 6)',
+                quina: 'Ex: 04 24 34 42 52 (Mínimo 5)',
+                lotofacil: 'Ex: 01 02 05 08 10 11 13 15 17 18 20 21 22 24 25 (15)',
+                lotomania: 'Ex: Digite suas 50 dezenas ou marque no volante'
+            };
+            input.placeholder = placeholders[gameId] || 'Digite suas dezenas de 2 em 2';
+        }
+        this.setScannerStatus('', 'muted');
     }
 
     hideConfirmBox() {
@@ -421,6 +456,19 @@ class TicketScannerMixin {
             grid.appendChild(ball);
         }
 
+        // Configura seletor de modalidade no volante
+        const manualPills = document.querySelectorAll('.manual-game-pill');
+        manualPills.forEach(pill => {
+            if (!pill._hasManualClick) {
+                pill._hasManualClick = true;
+                pill.addEventListener('click', () => {
+                    const g = pill.getAttribute('data-manual-game');
+                    this.setManualGame(g);
+                });
+            }
+            pill.classList.toggle('active', pill.getAttribute('data-manual-game') === this.currentGame);
+        });
+
         // Configura máscara automática e escuta no campo de digitação
         const input = document.getElementById('manualNumbersInput');
         if (input && !input._hasMaskListener) {
@@ -486,6 +534,15 @@ class TicketScannerMixin {
             return;
         }
 
+        const contest = contestInput && contestInput.value.trim()
+            ? parseInt(contestInput.value.trim(), 10)
+            : null;
+
+        // Auto-identifica a modalidade se o concurso for alto (ex: concurso 7107 é da Quina)
+        if (contest && contest >= 4000 && this.currentGame === 'megasena') {
+            this.setManualGame('quina');
+        }
+
         // Validação da aposta mínima por modalidade
         const minBets = { megasena: 6, quina: 5, lotofacil: 15, lotomania: 50 };
         const minRequired = minBets[this.currentGame] || 5;
@@ -493,10 +550,6 @@ class TicketScannerMixin {
             this.setScannerStatus(`⚠️ A ${this.capitalize(this.currentGame)} requer no mínimo ${minRequired} dezenas (você digitou ${numbers.length}).`, 'warn');
             return;
         }
-
-        const contest = contestInput && contestInput.value.trim()
-            ? parseInt(contestInput.value.trim(), 10)
-            : null;
 
         this.checkTicket(this.currentGame, numbers, contest);
     }
@@ -627,6 +680,51 @@ class TicketScannerMixin {
                 gameCard.appendChild(ballsRow);
                 gamesContainer.appendChild(gameCard);
             });
+        }
+
+        // Renderizar Comparação Histórica dos 2 Últimos Concursos
+        const recentDrawsBox = document.getElementById('recentDrawsComparison');
+        const recentDrawsGrid = document.getElementById('recentDrawsGrid');
+        if (recentDrawsBox && recentDrawsGrid) {
+            const recent = result.recent_comparisons || [];
+            if (recent.length > 0) {
+                recentDrawsBox.style.display = 'block';
+                recentDrawsGrid.innerHTML = '';
+
+                recent.forEach(r => {
+                    const card = document.createElement('div');
+                    card.className = 'recent-draw-card';
+
+                    const cardHead = document.createElement('div');
+                    cardHead.className = 'recent-draw-header';
+                    cardHead.innerHTML = `
+                        <span class="recent-draw-title">Concurso #${r.contest} • ${r.date}</span>
+                        <span class="recent-draw-badge ${r.hit_count > 0 ? (r.is_winner ? 'winner' : 'hit') : 'zero'}">
+                            ${r.hit_count} acerto(s) ${r.is_winner ? '🎉 PREMIADO!' : ''}
+                        </span>
+                    `;
+                    card.appendChild(cardHead);
+
+                    const rBallsRow = document.createElement('div');
+                    rBallsRow.className = 'lottery-balls-row compact';
+                    const sizeClass = r.official_numbers.length > 15 ? 'mini-size' : 'compact-size';
+                    const userSet = new Set(result.user_numbers || []);
+
+                    r.official_numbers.forEach(num => {
+                        const ball = document.createElement('div');
+                        const isHit = userSet.has(num);
+                        ball.className = `ball ball-${result.game_id} ${sizeClass} ${isHit ? 'hit-match' : ''}`;
+                        ball.textContent = num;
+                        if (isHit) ball.title = `Dezena jogada que saiu no concurso #${r.contest}!`;
+                        rBallsRow.appendChild(ball);
+                    });
+                    card.appendChild(rBallsRow);
+
+                    recentDrawsGrid.appendChild(card);
+                });
+            } else {
+                recentDrawsBox.style.display = 'none';
+            }
         }
 
         if (isWinner) {

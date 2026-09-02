@@ -163,6 +163,39 @@ def check_ticket(
             "band_winners": g_winners,
         })
 
+    # Comparação Histórica com os 2 últimos concursos oficiais
+    recent_comparisons = []
+    current_contest_num = int(contest.get("concurso") or 0)
+    if current_contest_num > 1:
+        for offset in (1, 2):
+            prev_num = current_contest_num - offset
+            try:
+                prev_data = lottery_service.fetch_contest_by_number(game_id, prev_num)
+                if prev_data and prev_data.get("dezenas"):
+                    prev_official = prev_data["dezenas"]
+                    prev_set = set(prev_official)
+                    prev_hits = [n for n in flat_numbers if n in prev_set]
+                    
+                    prev_is_winner = False
+                    prev_band_name = None
+                    for band in prev_data.get("rateio", []):
+                        if _band_hits(band.get("descricao", "")) == len(prev_hits):
+                            prev_is_winner = True
+                            prev_band_name = band.get("descricao")
+                            break
+
+                    recent_comparisons.append({
+                        "contest": prev_num,
+                        "date": prev_data.get("data_apuracao", ""),
+                        "official_numbers": prev_official,
+                        "hit_numbers": prev_hits,
+                        "hit_count": len(prev_hits),
+                        "is_winner": prev_is_winner,
+                        "band_description": prev_band_name or f"{len(prev_hits)} acerto(s)"
+                    })
+            except Exception as e:
+                logger.debug("Não foi possível buscar concurso anterior %s: %s", prev_num, e)
+
     return {
         "game_id": game_id,
         "game_name": LOTTERY_CONFIGS[game_id]["name"],
@@ -177,4 +210,5 @@ def check_ticket(
         "prize": total_prize,
         "source": contest.get("origem"),
         "games_results": games_results,
+        "recent_comparisons": recent_comparisons,
     }

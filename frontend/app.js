@@ -62,6 +62,15 @@ class TimesFMStudio {
             });
         });
 
+        // Seleção Direta de Modalidade na Aba de Palpites
+        const predPills = document.querySelectorAll('.pred-lottery-pill');
+        predPills.forEach(pill => {
+            pill.addEventListener('click', () => {
+                const game = pill.getAttribute('data-pred-game');
+                this.selectLottery(game);
+            });
+        });
+
         // Botão Central FAB Scanner no Mobile
         const mobFabScanner = document.getElementById('mobFabScanner');
         const scannerModal = document.getElementById('scannerModal');
@@ -304,6 +313,12 @@ class TimesFMStudio {
         });
         document.querySelectorAll('.mobile-tab-btn').forEach(btn => {
             btn.classList.toggle('active', btn.getAttribute('data-game') === gameId);
+        });
+        document.querySelectorAll('.pred-lottery-pill').forEach(pill => {
+            pill.classList.toggle('active', pill.getAttribute('data-pred-game') === gameId);
+        });
+        document.querySelectorAll('.manual-game-pill').forEach(pill => {
+            pill.classList.toggle('active', pill.getAttribute('data-manual-game') === gameId);
         });
 
         this.loadLotteryData(gameId);

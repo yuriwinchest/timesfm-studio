@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=2.8.0">
+    <link rel="stylesheet" href="/static/style.css?v=2.9.0">
     
     <!-- Chart.js & HTML5 QR Code Scanner via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -173,6 +173,27 @@
             <!-- ============================================== -->
             <div id="predictionsView" class="view-content-wrapper" style="display: none;">
                 <section class="card predictions-main-card">
+                    
+                    <!-- SELETOR DIRETO DE MODALIDADE PARA PALPITES -->
+                    <div class="pred-lottery-selector" id="predLotterySelector">
+                        <button class="pred-lottery-pill active" data-pred-game="megasena">
+                            <span class="pred-pill-dot icon-ms">MS</span>
+                            <span>Mega-Sena</span>
+                        </button>
+                        <button class="pred-lottery-pill" data-pred-game="quina">
+                            <span class="pred-pill-dot icon-qn">QN</span>
+                            <span>Quina</span>
+                        </button>
+                        <button class="pred-lottery-pill" data-pred-game="lotofacil">
+                            <span class="pred-pill-dot icon-lf">LF</span>
+                            <span>Lotofácil</span>
+                        </button>
+                        <button class="pred-lottery-pill" data-pred-game="lotomania">
+                            <span class="pred-pill-dot icon-lm">LM</span>
+                            <span>Lotomania</span>
+                        </button>
+                    </div>
+
                     <div class="pred-header-bar">
                         <div class="pred-header-info">
                             <div class="ai-badge">
@@ -418,19 +439,42 @@
             <div class="manual-check-box" id="manualCheckBox" style="display: none;">
                 <div class="manual-sheet-header">
                     <h4>Conferência Manual de Jogo</h4>
-                    <p class="manual-sheet-desc">Digite ou toque no volante para marcar suas dezenas.</p>
+                    <p class="manual-sheet-desc">Escolha a loteria, digite ou toque no volante para marcar suas dezenas.</p>
+                </div>
+
+                <!-- SELETOR DE MODALIDADE NA CONFERÊNCIA MANUAL -->
+                <div class="manual-game-selector" id="manualGameSelector">
+                    <button class="manual-game-pill active" data-manual-game="megasena">
+                        <span class="manual-pill-dot icon-ms">MS</span>
+                        <span>Mega-Sena</span>
+                    </button>
+                    <button class="manual-game-pill" data-manual-game="quina">
+                        <span class="manual-pill-dot icon-qn">QN</span>
+                        <span>Quina</span>
+                    </button>
+                    <button class="manual-game-pill" data-manual-game="lotofacil">
+                        <span class="manual-pill-dot icon-lf">LF</span>
+                        <span>Lotofácil</span>
+                    </button>
+                    <button class="manual-game-pill" data-manual-game="lotomania">
+                        <span class="manual-pill-dot icon-lm">LM</span>
+                        <span>Lotomania</span>
+                    </button>
                 </div>
 
                 <div class="contest-input-row">
                     <label for="manualContestInput" class="manual-label">Concurso nº:</label>
                     <input type="number" id="manualContestInput" placeholder="Ex: 2962" class="custom-input contest-input">
-                    <span class="contest-tip">(Vazio usa o último oficial)</span>
+                    <span class="contest-tip">(Vazio usa o último concurso oficial)</span>
                 </div>
                 
                 <div class="manual-input-group">
-                    <input type="text" id="manualNumbersInput" placeholder="Ex: 03, 11, 24, 38, 42, 55" class="custom-input">
+                    <input type="text" id="manualNumbersInput" placeholder="Ex: 04 24 34 42 52" class="custom-input">
                     <button class="btn btn-primary" id="checkManualGameBtn">🔍 Conferir</button>
                 </div>
+
+                <!-- ALERTA/STATUS EM TEMPO REAL NA CONFERÊNCIA MANUAL -->
+                <div class="manual-status-box" id="manualStatusMsg" style="display: none;"></div>
 
                 <div class="quick-picker-grid" id="quickPickerGrid">
                     <!-- Gerado dinamicamente para a loteria ativa -->
@@ -482,6 +526,16 @@
                     </div>
                 </div>
 
+                <!-- Comparação Histórica com os 2 Últimos Concursos -->
+                <div class="recent-draws-comparison" id="recentDrawsComparison" style="display: none;">
+                    <div class="section-label-row">
+                        <span class="comp-label">📊 Desempenho nos 2 Sorteios Anteriores:</span>
+                    </div>
+                    <div class="recent-draws-grid" id="recentDrawsGrid">
+                        <!-- Injetado dinamicamente -->
+                    </div>
+                </div>
+
                 <!-- Resumo dos Prêmios -->
                 <div class="prize-summary-box" id="prizeSummaryBox">
                     <div class="prize-stat">
@@ -506,7 +560,7 @@
         </div>
     </div>
 
-    <script src="/static/scanner.js?v=2.8.0"></script>
-    <script src="/static/app.js?v=2.8.0"></script>
+    <script src="/static/scanner.js?v=2.9.0"></script>
+    <script src="/static/app.js?v=2.9.0"></script>
 </body>
 </html>
