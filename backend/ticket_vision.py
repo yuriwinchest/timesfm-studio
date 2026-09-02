@@ -228,6 +228,28 @@ class TicketVision:
 
         return best_effort
 
+    def extract_games(self, image, game_id: Optional[str]) -> List[List[str]]:
+        """Extrai os jogos individuais impressos no comprovante (ex: Jogo A e Jogo B)."""
+        rules = BET_SIZE_RULES.get(game_id)
+        baixo, alto = NUMBER_RANGE_RULES.get(game_id or "megasena", (0, 99))
+        variantes = self._prepare_variants(image)
+
+        for prepared, config in [(variantes[0], TESS_TEXT), (variantes[1], TESS_TEXT)]:
+            try:
+                texto = pytesseract.image_to_string(prepared, config=config)
+                games = []
+                for bruta in texto.splitlines():
+                    tokens = self._bet_line_tokens(bruta, baixo, alto)
+                    if tokens:
+                        deduped = self._dedupe(tokens)
+                        if rules and rules[0] <= len(deduped) <= rules[1]:
+                            games.append(deduped)
+                if games:
+                    return games
+            except Exception:
+                continue
+        return []
+
     def _numbers_from_lines(self, texto: str, game_id: Optional[str]) -> List[str]:
         """Junta as linhas que contem exclusivamente dezenas da modalidade."""
         baixo, alto = NUMBER_RANGE_RULES.get(game_id or "megasena", (0, 99))

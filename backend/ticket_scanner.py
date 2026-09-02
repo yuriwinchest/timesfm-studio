@@ -65,6 +65,9 @@ class TicketScanner:
         numbers = self.vision.extract_numbers(oriented, game_id)
 
         valid, validation_msg = self._validate(numbers, game_id)
+        games = self.vision.extract_games(oriented, game_id) if hasattr(self.vision, "extract_games") else []
+        if not games and numbers:
+            games = [numbers]
 
         # A deducao so entra quando o logo NAO foi lido. Deixa-la sobrepor o logo
         # impresso produziu um erro grave em teste: as 50 dezenas de uma Lotomania,
@@ -77,6 +80,7 @@ class TicketScanner:
                 valid = True
                 validation_msg = ("Dezenas lidas do comprovante. A modalidade foi deduzida "
                                   "pelo formato da aposta - confirme antes de conferir.")
+                games = [numbers]
 
         return {
             "success": valid,
@@ -85,6 +89,7 @@ class TicketScanner:
             "game_id": game_id,
             "contest": contest,
             "numbers": numbers,
+            "games": games,
             "qr_payload": qr_payload,
             "needs_confirmation": True,
             "orientation": orientation,

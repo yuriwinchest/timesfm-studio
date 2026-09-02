@@ -18,6 +18,7 @@ class TicketScannerMixin {
         if (mode === 'camera') {
             if (cameraBox) cameraBox.style.display = 'flex';
             if (manualBox) manualBox.style.display = 'none';
+            this.resetPhotoCaptureState();
             this.startCameraScanner();
         } else {
             if (cameraBox) cameraBox.style.display = 'none';
@@ -25,6 +26,15 @@ class TicketScannerMixin {
             this.stopCameraScanner();
             this.renderQuickPickerGrid();
         }
+    }
+
+    resetPhotoCaptureState() {
+        this.currentPhotoBlob = null;
+        const activeActions = document.getElementById('cameraActiveActions');
+        const previewActions = document.getElementById('photoPreviewActions');
+        if (activeActions) activeActions.style.display = 'flex';
+        if (previewActions) previewActions.style.display = 'none';
+        this.setScannerStatus('Aponte a câmera para o comprovante ou selecione uma foto nítida do seu bilhete.', 'muted');
     }
 
     async startCameraScanner() {
@@ -74,14 +84,14 @@ class TicketScannerMixin {
                 () => {}
             );
             this.isScannerRunning = true;
-            this.setScannerStatus('Enquadre o bilhete no visor e toque em 📸 Capturar e Ler o Bilhete', 'muted');
+            this.setScannerStatus('Posicione o comprovante no visor e toque em "Tirar Foto da Câmera"', 'muted');
         } catch (err) {
             console.warn('Erro ao abrir câmera:', err);
             const secure = window.isSecureContext;
             this.setScannerStatus(
                 secure
-                    ? '💡 Câmera indisponível. Use "🖼️ Enviar Foto do Arquivo" para mandar uma foto do bilhete.'
-                    : '🔒 A câmera exige HTTPS. Acesse pelo domínio seguro ou use "🖼️ Enviar Foto do Arquivo".',
+                    ? '💡 Câmera em espera. Toque em "Escolher Foto da Galeria / Arquivo" para enviar o bilhete.'
+                    : '🔒 A câmera exige HTTPS. Acesse pelo domínio seguro ou escolha a foto da galeria.',
                 'warn'
             );
         }
@@ -99,9 +109,7 @@ class TicketScannerMixin {
     }
 
     /**
-     * Congela o quadro atual da câmera ao vivo e manda para o OCR.
-     * É o caminho do desktop: no computador o input de arquivo abre um seletor,
-     * não a câmera, então sem isto não existe como capturar o bilhete pelo navegador.
+     * Congela o quadro da câmera e prepara para verificação.
      */
     async captureFromCamera() {
         const video = document.querySelector('#cameraReader video');
@@ -115,7 +123,6 @@ class TicketScannerMixin {
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
 
-        // Desfaz o espelhamento se o usuário ativou o modo espelho no visor
         if (this.isMirrored) {
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
@@ -128,24 +135,23 @@ class TicketScannerMixin {
             return;
         }
 
-        console.info(`Quadro capturado da câmera: ${canvas.width}x${canvas.height}px`);
-        await this.processUploadedPhoto(blob);
+        await this.handlePhotoReady(blob);
     }
 
     /**
-     * Envia a foto do comprovante para o pipeline óptico do backend (OpenCV + Tesseract).
-     * O navegador não decide nada aqui: ele mostra o que foi lido e pede confirmação.
+     * Recebe um Blob de foto (seja da câmera ao vivo ou do input de arquivo da galeria),
+     * congela a visualização com preview nítido e exibe o botão destacado "Verificar Resultado".
      */
-    async processUploadedPhoto(file) {
-        const cameraViewport = document.getElementById('cameraReader');
-
+    async handlePhotoReady(fileOrBlob) {
+        this.currentPhotoBlob = fileOrBlob;
         await this.stopCameraScanner();
         this.hideConfirmBox();
 
+        const cameraViewport = document.getElementById('cameraReader');
         if (cameraViewport) {
             cameraViewport.innerHTML = '';
             const previewImg = document.createElement('img');
-            previewImg.src = URL.createObjectURL(file);
+            previewImg.src = URL.createObjectURL(fileOrBlob);
             previewImg.style.width = '100%';
             previewImg.style.height = '100%';
             previewImg.style.objectFit = 'contain';
@@ -154,11 +160,39 @@ class TicketScannerMixin {
             cameraViewport.appendChild(previewImg);
         }
 
-        this.setScannerStatus('🔄 Lendo o comprovante (orientação, QR e dezenas impressas)...', 'info');
+        // Alterna os botões: esconde captura e mostra "Verificar Resultado"
+        const activeActions = document.getElementById('cameraActiveActions');
+        const previewActions = document.getElementById('photoPreviewActions');
+        if (activeActions) activeActions.style.display = 'none';
+        if (previewActions) previewActions.style.display = 'flex';
+
+        this.setScannerStatus('📸 Foto pronta! Toque em "🔍 Verificar Resultado" para ler o bilhete e calcular seus acertos.', 'ok');
+    }
+
+    /**
+     * Dispara a leitura do bilhete via OCR e realiza a conferência oficial na Caixa.
+     */
+    async analyzeAndVerifyPhoto() {
+        if (!this.currentPhotoBlob) {
+            this.setScannerStatus('⚠️ Nenhuma foto capturada. Tire uma foto ou escolha da galeria.', 'warn');
+            return;
+        }
+
+        const verifyBtn = document.getElementById('verifyPhotoBtn');
+        const originalBtnHtml = verifyBtn ? verifyBtn.innerHTML : '';
+        if (verifyBtn) {
+            verifyBtn.disabled = true;
+            verifyBtn.innerHTML = `
+                <div class="spinner" style="width: 20px; height: 20px; border-width: 2px;"></div>
+                <span>Lendo bilhete e conferindo...</span>
+            `;
+        }
+
+        this.setScannerStatus('🔄 Lendo dezenas, modalidade e concurso do comprovante...', 'info');
 
         try {
             const form = new FormData();
-            form.append('file', file, file.name || 'bilhete.jpg');
+            form.append('file', this.currentPhotoBlob, 'bilhete.jpg');
             form.append('game_id', this.currentGame);
 
             const res = await fetch('/api/lottery/scan-ticket', { method: 'POST', body: form });
@@ -175,19 +209,33 @@ class TicketScannerMixin {
                 console.info('Payload bruto do QR do comprovante:', data.qr_payload);
             }
 
-            if (!data.success) {
-                this.setScannerStatus(`⚠️ ${data.message}`, 'warn');
+            if (!data.success || !data.numbers || data.numbers.length === 0) {
+                this.setScannerStatus(`⚠️ ${data.message || 'Não foi possível ler as dezenas com nitidez.'}`, 'warn');
                 this.openManualWith(data.numbers || [], data.contest, data.game_id);
                 return;
             }
 
-            this.showTicketConfirmation(data);
+            // Detectou o jogo e as dezenas! Executa imediatamente a conferência oficial
+            const gameId = data.game_id || this.currentGame;
+            if (gameId !== this.currentGame) this.selectLottery(gameId);
+
+            this.pendingTicket = {
+                game_id: gameId,
+                numbers: data.numbers || [],
+                contest: data.contest || null,
+                games: data.games || [data.numbers]
+            };
+
+            await this.checkTicket(gameId, data.numbers, data.contest, data.games);
 
         } catch (err) {
             console.error('Erro no processamento da foto:', err);
-            this.setScannerStatus('⚠️ Não consegui falar com o servidor de leitura. Use o modo manual.', 'warn');
-            this.openManualWith([], null, this.currentGame);
+            this.setScannerStatus('⚠️ Erro ao comunicar com o servidor. Verifique sua conexão.', 'warn');
         } finally {
+            if (verifyBtn) {
+                verifyBtn.disabled = false;
+                verifyBtn.innerHTML = originalBtnHtml;
+            }
             this.resetFileInput();
         }
     }
@@ -206,7 +254,7 @@ class TicketScannerMixin {
         this.pendingTicket = null;
     }
 
-    /** Mostra as dezenas lidas para o usuário validar ANTES de qualquer conferência. */
+    /** Mostra as dezenas lidas para o usuário validar caso queira alterar manualmente. */
     showTicketConfirmation(data) {
         const gameId = data.game_id || this.currentGame;
         if (gameId !== this.currentGame) this.selectLottery(gameId);
@@ -214,7 +262,8 @@ class TicketScannerMixin {
         this.pendingTicket = {
             game_id: gameId,
             numbers: data.numbers || [],
-            contest: data.contest || null
+            contest: data.contest || null,
+            games: data.games || [data.numbers]
         };
 
         const box = document.getElementById('ticketConfirmBox');
@@ -222,7 +271,7 @@ class TicketScannerMixin {
         const ballsRow = document.getElementById('confirmBalls');
 
         if (subtitle) {
-            const contestTxt = data.contest ? `Concurso #${data.contest}` : 'Concurso: último oficial disponível';
+            const contestTxt = data.contest ? `Concurso #${data.contest}` : 'Concurso: último oficial';
             subtitle.textContent = `${this.capitalize(gameId)} • ${contestTxt} • ${this.pendingTicket.numbers.length} dezenas lidas`;
         }
 
@@ -238,7 +287,7 @@ class TicketScannerMixin {
         }
 
         if (box) box.style.display = 'flex';
-        this.setScannerStatus('👀 Confira se as dezenas batem com o seu bilhete antes de validar.', 'ok');
+        this.setScannerStatus('👀 Confira as dezenas lidas antes de prosseguir.', 'ok');
     }
 
     /** Abre o volante manual já preenchido com o que o OCR conseguiu ler. */
@@ -278,9 +327,9 @@ class TicketScannerMixin {
         if (resultBox) resultBox.style.display = 'none';
         this.hideConfirmBox();
 
-        // Resetar instruções
+        // Resetar instruções e capturas
         this.lastQrPayload = null;
-        this.setScannerStatus('Enquadre o bilhete no visor e toque em 📸 Capturar e Ler o Bilhete', 'muted');
+        this.currentPhotoBlob = null;
 
         // Limpar campos manuais
         const input = document.getElementById('manualNumbersInput');
@@ -289,6 +338,7 @@ class TicketScannerMixin {
         document.querySelectorAll('.pick-ball').forEach(b => b.classList.remove('selected'));
 
         // Reiniciar Câmera
+        this.resetPhotoCaptureState();
         this.startCameraScanner();
 
         // Rolar modal de volta para o topo
@@ -298,13 +348,7 @@ class TicketScannerMixin {
         }
     }
 
-    /**
-     * O QR do comprovante da Caixa é um payload opaco: ele NÃO contém as dezenas
-     * apostadas. Serve para identificar o comprovante e, quando presente, o concurso.
-     * Por isso o fluxo correto é: leu o QR -> pede a foto para o OCR ler as dezenas.
-     */
     async onQrCodeScanned(decodedText) {
-        // Não para a câmera: o QR é só um bônus, quem lê as dezenas é a captura da foto.
         if (this.lastQrPayload === decodedText) return;
         this.lastQrPayload = decodedText;
         console.info('Payload bruto do QR do comprovante:', decodedText);
@@ -318,8 +362,8 @@ class TicketScannerMixin {
 
         this.setScannerStatus(
             contest
-                ? `✅ QR lido (Concurso #${contest}). O QR não traz as dezenas — toque em 📸 Capturar para lê-las.`
-                : '✅ QR lido, mas ele não traz as dezenas apostadas — toque em 📸 Capturar para lê-las.',
+                ? `✅ QR lido (Concurso #${contest}). Toque em "Tirar Foto da Câmera" para ler as dezenas.`
+                : '✅ QR identificado. Toque em "Tirar Foto da Câmera" para ler as dezenas apostadas.',
             'warn'
         );
     }
@@ -401,11 +445,10 @@ class TicketScannerMixin {
     }
 
     /**
-     * Conferência oficial: quem calcula acertos, faixa e prêmio é o backend,
-     * contra o resultado real da Caixa. O front só exibe.
+     * Conferência oficial contra o resultado real da Caixa.
      */
-    async checkTicket(gameId, numbers, contest = null) {
-        this.setScannerStatus('🔄 Conferindo na base oficial da Caixa...', 'info');
+    async checkTicket(gameId, numbers, contest = null, games = null) {
+        this.setScannerStatus('🔄 Consultando resultado oficial na Caixa...', 'info');
 
         try {
             const res = await fetch('/api/lottery/check-ticket', {
@@ -421,16 +464,17 @@ class TicketScannerMixin {
             }
 
             this.hideConfirmBox();
-            this.renderTicketResult(json.data);
+            this.renderTicketResult(json.data, games);
 
         } catch (e) {
             console.error('Erro ao conferir bilhete:', e);
-            this.setScannerStatus('⚠️ Servidor indisponível para a conferência. Tente novamente.', 'warn');
+            this.setScannerStatus('⚠️ Servidor indisponível para conferência. Tente novamente.', 'warn');
         }
     }
 
-    renderTicketResult(result) {
-        const officialSet = new Set(result.official_numbers || []);
+    renderTicketResult(result, detectedGames = null) {
+        const officialNumbers = result.official_numbers || [];
+        const officialSet = new Set(officialNumbers);
         const hitCount = result.hit_count;
         const isWinner = result.is_winner;
 
@@ -439,14 +483,91 @@ class TicketScannerMixin {
         const icon = document.getElementById('resultIcon');
         const title = document.getElementById('resultTitle');
         const subtitle = document.getElementById('resultSubtitle');
-        const userBallsContainer = document.getElementById('ticketUserBalls');
         const statHits = document.getElementById('statHits');
         const statFaixa = document.getElementById('statFaixa');
         const statPrize = document.getElementById('statPrize');
+        const contestBadge = document.getElementById('resultContestBadge');
+        const officialBallsRow = document.getElementById('officialResultBalls');
+        const gamesContainer = document.getElementById('ticketGamesContainer');
 
         if (resultBox) resultBox.style.display = 'flex';
 
         const contestLabel = `Concurso #${result.contest} • ${result.contest_date || ''}`.trim();
+        if (contestBadge) {
+            contestBadge.textContent = `${this.capitalize(result.game_id)} #${result.contest}`;
+        }
+
+        // Renderizar Bolas Sorteadas Oficiais da Caixa
+        if (officialBallsRow) {
+            officialBallsRow.innerHTML = '';
+            const sizeClass = officialNumbers.length > 15 ? 'mini-size' : 'compact-size';
+            officialNumbers.forEach(num => {
+                const ball = document.createElement('div');
+                ball.className = `ball ball-${result.game_id} ${sizeClass}`;
+                ball.textContent = num;
+                officialBallsRow.appendChild(ball);
+            });
+        }
+
+        // Renderizar Jogos do Usuário
+        if (gamesContainer) {
+            gamesContainer.innerHTML = '';
+            const gamesList = (result.games_results && result.games_results.length > 0)
+                ? result.games_results
+                : (detectedGames && detectedGames.length > 1)
+                    ? detectedGames.map((g, idx) => {
+                        const gHits = g.filter(n => officialSet.has(n));
+                        return {
+                            game_label: `Jogo ${chr(65 + idx) || (idx + 1)}`,
+                            numbers: g,
+                            hit_count: gHits.length,
+                            hit_numbers: gHits
+                        };
+                    })
+                    : [{
+                        game_label: 'Seu Jogo',
+                        numbers: result.user_numbers || [],
+                        hit_count: hitCount,
+                        hit_numbers: result.hit_numbers || []
+                    }];
+
+            gamesList.forEach(game => {
+                const gameCard = document.createElement('div');
+                gameCard.className = 'game-block-card';
+
+                const header = document.createElement('div');
+                header.className = 'game-block-header';
+
+                const label = document.createElement('span');
+                label.style.fontWeight = '700';
+                label.textContent = game.game_label || 'Seu Jogo';
+
+                const badge = document.createElement('span');
+                const hits = game.hit_count !== undefined ? game.hit_count : (game.hit_numbers ? game.hit_numbers.length : 0);
+                badge.className = `game-hits-badge ${hits >= 3 ? 'winner' : ''}`;
+                badge.textContent = `${hits} acerto(s)`;
+
+                header.appendChild(label);
+                header.appendChild(badge);
+                gameCard.appendChild(header);
+
+                const ballsRow = document.createElement('div');
+                ballsRow.className = 'lottery-balls-row compact';
+                const sizeClass = game.numbers.length > 15 ? 'mini-size' : (game.numbers.length > 6 ? 'compact-size' : '');
+
+                game.numbers.forEach(num => {
+                    const ball = document.createElement('div');
+                    const isHit = officialSet.has(num);
+                    ball.className = `ball ball-${result.game_id} ${sizeClass} ${isHit ? 'hit-match' : ''}`;
+                    ball.textContent = num;
+                    if (isHit) ball.title = 'Dezena acertada!';
+                    ballsRow.appendChild(ball);
+                });
+
+                gameCard.appendChild(ballsRow);
+                gamesContainer.appendChild(gameCard);
+            });
+        }
 
         if (isWinner) {
             if (banner) banner.className = 'result-banner';
@@ -454,8 +575,8 @@ class TicketScannerMixin {
             if (title) title.textContent = `PARABÉNS! BILHETE PREMIADO — ${hitCount} ACERTO(S)!`;
             if (subtitle) {
                 subtitle.textContent = result.prize > 0
-                    ? `${contestLabel} • Faixa premiada: ${result.band_description} (${result.band_winners} ganhador(es))`
-                    : `${contestLabel} • Faixa ${result.band_description}: sem ganhadores neste concurso, valor acumulado pela Caixa.`;
+                    ? `${contestLabel} • Faixa: ${result.band_description} (${result.band_winners} ganhador(es))`
+                    : `${contestLabel} • Faixa ${result.band_description}: prêmio acumulado pela Caixa.`;
             }
         } else {
             if (banner) banner.className = 'result-banner loser';
@@ -468,25 +589,8 @@ class TicketScannerMixin {
         if (statFaixa) statFaixa.textContent = isWinner ? result.band_description : 'Sem premiação';
         if (statPrize) statPrize.textContent = this.formatCurrency(result.prize);
 
-        // Bolas do Usuário com Destaque Dourado para Acertos
-        if (userBallsContainer) {
-            const userNumbers = result.user_numbers || [];
-            userBallsContainer.innerHTML = '';
-            const sizeClass = userNumbers.length > 15 ? 'mini-size' : (userNumbers.length > 6 ? 'compact-size' : '');
+        this.setScannerStatus(`✅ Conferência concluída com sucesso (${contestLabel}).`, 'ok');
 
-            userNumbers.forEach(num => {
-                const ball = document.createElement('div');
-                const isHit = officialSet.has(num);
-                ball.className = `ball ball-${result.game_id} ${sizeClass} ${isHit ? 'hit-match' : ''}`;
-                ball.textContent = num;
-                if (isHit) ball.title = 'Dezena sorteada acertada!';
-                userBallsContainer.appendChild(ball);
-            });
-        }
-
-        this.setScannerStatus(`✅ Conferido no resultado oficial da Caixa (${contestLabel}).`, 'ok');
-
-        // Rolar suavemente para exibir o resultado da conferência
         setTimeout(() => {
             const modalContainer = document.querySelector('.modal-container');
             if (modalContainer) {

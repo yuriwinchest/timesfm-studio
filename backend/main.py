@@ -59,6 +59,7 @@ class TicketCheckRequest(BaseModel):
     game_id: str = Field(..., description="Modalidade do bilhete: megasena, quina, lotofacil, lotomania")
     numbers: List[str] = Field(..., min_length=1, max_length=60, description="Dezenas apostadas no bilhete")
     contest: Optional[int] = Field(default=None, ge=1, le=99999, description="Numero do concurso; vazio usa o ultimo")
+    games: Optional[List[List[str]]] = Field(default=None, description="Lista de jogos individuais no comprovante")
 
 @app.on_event("startup")
 def aquecer_historico_oficial():
@@ -227,7 +228,7 @@ async def scan_ticket(file: UploadFile = File(...), game_id: Optional[str] = For
 def check_ticket_route(payload: TicketCheckRequest):
     """Confere as dezenas informadas contra o resultado oficial da Caixa."""
     try:
-        result = check_ticket(payload.game_id, payload.numbers, payload.contest)
+        result = check_ticket(payload.game_id, payload.numbers, payload.contest, payload.games)
         return {"success": True, "data": result}
     except ValueError as ve:
         raise HTTPException(status_code=400, detail=str(ve))

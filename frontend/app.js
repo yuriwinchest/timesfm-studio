@@ -139,7 +139,7 @@ class TimesFMStudio {
             });
         }
 
-        // Botão principal: congela o quadro da câmera e manda para o OCR
+        // Botão principal: congela o quadro da câmera e prepara preview
         const captureFrameBtn = document.getElementById('captureFrameBtn');
         if (captureFrameBtn) {
             captureFrameBtn.addEventListener('click', () => {
@@ -147,7 +147,7 @@ class TimesFMStudio {
             });
         }
 
-        // Botão Tirar / Carregar Foto HD do Bilhete
+        // Botão Escolher Foto da Galeria / Arquivo
         const triggerPhotoBtn = document.getElementById('triggerPhotoBtn');
         const ticketPhotoInput = document.getElementById('ticketPhotoInput');
         if (triggerPhotoBtn && ticketPhotoInput) {
@@ -157,8 +157,25 @@ class TimesFMStudio {
 
             ticketPhotoInput.addEventListener('change', (e) => {
                 if (e.target.files && e.target.files.length > 0) {
-                    this.processUploadedPhoto(e.target.files[0]);
+                    this.handlePhotoReady(e.target.files[0]);
                 }
+            });
+        }
+
+        // Botão Ação: Verificar Resultado
+        const verifyPhotoBtn = document.getElementById('verifyPhotoBtn');
+        if (verifyPhotoBtn) {
+            verifyPhotoBtn.addEventListener('click', () => {
+                this.analyzeAndVerifyPhoto();
+            });
+        }
+
+        // Botão Trocar / Tirar Outra Foto
+        const retakePhotoBtn = document.getElementById('retakePhotoBtn');
+        if (retakePhotoBtn) {
+            retakePhotoBtn.addEventListener('click', () => {
+                this.resetPhotoCaptureState();
+                this.startCameraScanner();
             });
         }
 
@@ -170,7 +187,8 @@ class TimesFMStudio {
                 this.checkTicket(
                     this.pendingTicket.game_id,
                     this.pendingTicket.numbers,
-                    this.pendingTicket.contest
+                    this.pendingTicket.contest,
+                    this.pendingTicket.games
                 );
             });
         }
@@ -178,6 +196,14 @@ class TimesFMStudio {
         const editTicketBtn = document.getElementById('editTicketBtn');
         if (editTicketBtn) {
             editTicketBtn.addEventListener('click', () => {
+                const t = this.pendingTicket || {};
+                this.openManualWith(t.numbers || [], t.contest, t.game_id);
+            });
+        }
+
+        const editFromResultsBtn = document.getElementById('editFromResultsBtn');
+        if (editFromResultsBtn) {
+            editFromResultsBtn.addEventListener('click', () => {
                 const t = this.pendingTicket || {};
                 this.openManualWith(t.numbers || [], t.contest, t.game_id);
             });

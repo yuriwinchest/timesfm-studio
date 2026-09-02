@@ -759,67 +759,172 @@ body {
 }
 
 .scanner-camera-box {
-    padding: 0.75rem 1.25rem 1rem 1.25rem;
+    padding: 0.75rem 1.25rem 1.25rem 1.25rem;
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
+}
+
+.camera-viewport-wrapper {
+    position: relative;
+    width: 100%;
+    max-width: 340px;
+    display: flex;
+    justify-content: center;
 }
 
 .camera-reader-viewport {
-    width: 290px;
+    width: 320px;
     height: 380px;
-    max-width: 90vw;
+    max-width: 100%;
     background: #000;
     border-radius: var(--radius-md);
     overflow: hidden;
     position: relative;
-    border: 2px solid var(--border-color);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    border: 2px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .camera-reader-viewport.mirrored video {
     transform: scaleX(-1) !important;
 }
 
-.camera-guideline { text-align: center; position: relative; }
-.scanner-instruction { font-size: 0.78rem; color: var(--text-muted); margin-top: 2px; }
-
-.camera-controls {
+.camera-reader-viewport img {
     width: 100%;
-    max-width: 320px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    height: 100%;
+    object-fit: contain;
+    border-radius: var(--radius-md);
 }
 
-.btn-photo-upload {
+.camera-guideline {
+    position: absolute;
+    inset: 15px;
+    border: 2px dashed rgba(245, 158, 11, 0.4);
+    border-radius: var(--radius-sm);
+    pointer-events: none;
+    box-shadow: inset 0 0 20px rgba(245, 158, 11, 0.08);
+}
+
+.scanner-instruction {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    text-align: center;
+    max-width: 400px;
+    line-height: 1.35;
+}
+
+.camera-action-buttons {
     width: 100%;
-    background: linear-gradient(135deg, #2563eb, #0284c7);
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-capture-main {
+    width: 100%;
+    background: linear-gradient(135deg, #0284c7, #2563eb);
     color: #fff;
     font-weight: 700;
-    padding: 10px 14px;
-    border-radius: var(--radius-sm);
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+    font-size: 0.95rem;
+    padding: 12px 18px;
+    border-radius: var(--radius-md);
     border: none;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    font-size: 0.85rem;
+    gap: 10px;
+    box-shadow: 0 6px 20px rgba(37, 99, 235, 0.4);
     transition: all 0.2s ease;
 }
 
-.btn-photo-upload:hover {
+.btn-capture-main:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.5);
+    box-shadow: 0 8px 25px rgba(37, 99, 235, 0.6);
+    background: linear-gradient(135deg, #0369a1, #1d4ed8);
 }
 
-.camera-sub-actions {
+.btn-upload-gallery {
+    width: 100%;
+    background: rgba(14, 21, 38, 0.85);
+    border: 1px solid var(--border-color);
+    color: var(--text-main);
+    font-weight: 600;
+    font-size: 0.88rem;
+    padding: 10px 16px;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-upload-gallery:hover {
+    background: var(--bg-card-hover);
+    border-color: #38bdf8;
+    color: #fff;
+}
+
+.camera-sub-toggles {
     display: flex;
     gap: 8px;
     justify-content: center;
+    width: 100%;
+}
+
+.camera-sub-toggles .btn-sm {
+    flex: 1;
+    text-align: center;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    white-space: nowrap;
+}
+
+/* PAINEL DE AÇÃO QUANDO A FOTO JÁ FOI TIRADA / CARREGADA */
+.photo-preview-actions {
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 4px;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.btn-verify-action {
+    width: 100%;
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: #fff;
+    font-weight: 800;
+    font-size: 1.02rem;
+    padding: 14px 20px;
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    box-shadow: 0 6px 24px rgba(16, 185, 129, 0.45);
+    transition: all 0.2s ease;
+}
+
+.btn-verify-action:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(16, 185, 129, 0.65);
+    background: linear-gradient(135deg, #047857, #059669);
 }
 
 .manual-check-box {
@@ -940,22 +1045,22 @@ body {
 .confirm-actions .btn { flex: 1 1 180px; }
 
 .ticket-check-result {
-    padding: 1.5rem 1.75rem;
+    padding: 1.25rem 1.5rem;
     border-top: 1px solid var(--border-color);
     background: rgba(14, 21, 38, 0.6);
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
 }
 
 .result-banner {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 12px 16px;
+    gap: 14px;
+    padding: 14px 18px;
     border-radius: var(--radius-md);
-    background: rgba(16, 185, 129, 0.1);
-    border: 1px solid rgba(16, 185, 129, 0.3);
+    background: rgba(16, 185, 129, 0.12);
+    border: 1px solid rgba(16, 185, 129, 0.35);
 }
 
 .result-banner.loser {
@@ -963,9 +1068,96 @@ body {
     border-color: rgba(239, 68, 68, 0.3);
 }
 
-.result-badge-icon { font-size: 1.75rem; }
-.result-banner h4 { font-size: 1.05rem; font-weight: 700; color: #fff; }
-.result-banner p { font-size: 0.78rem; color: var(--text-muted); }
+.result-badge-icon { font-size: 2rem; flex-shrink: 0; }
+.result-text-group h4 { font-size: 1.05rem; font-weight: 800; color: #fff; margin-bottom: 2px; }
+.result-text-group p { font-size: 0.8rem; color: var(--text-muted); }
+
+.official-draw-section {
+    background: rgba(7, 10, 19, 0.5);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.section-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.comp-label {
+    font-size: 0.78rem;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.contest-badge-pill {
+    font-size: 0.74rem;
+    font-family: var(--font-mono);
+    color: #38bdf8;
+    background: rgba(56, 189, 248, 0.12);
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.ticket-games-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 6px;
+}
+
+.game-block-card {
+    background: rgba(15, 23, 42, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.game-block-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+}
+
+.game-hits-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+}
+
+.game-hits-badge.winner {
+    background: rgba(16, 185, 129, 0.2);
+    color: #34d399;
+}
+
+.ball.hit-match {
+    box-shadow: 0 0 14px #fbbf24, 0 0 28px rgba(245, 158, 11, 0.6) !important;
+    border: 2px solid #fff !important;
+    transform: scale(1.08);
+    animation: goldPulse 1.8s infinite alternate;
+}
+
+@keyframes goldPulse {
+    from { box-shadow: 0 0 10px #fbbf24; }
+    to { box-shadow: 0 0 22px #f59e0b, 0 0 35px rgba(245, 158, 11, 0.8); }
+}
 
 .prize-summary-box {
     display: grid;
@@ -984,6 +1176,14 @@ body {
 .stat-label { display: block; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; }
 .stat-val { font-family: var(--font-mono); font-size: 1.15rem; font-weight: 800; color: #fff; }
 .stat-val.prize-color { color: #34d399; }
+
+.result-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+
+.result-actions .btn { flex: 1 1 180px; }
 
 /* ==========================================
    MOBILE BOTTOM BAR (PWA / APP NATIVO)
