@@ -139,6 +139,22 @@ def get_lottery_games():
         "games": lottery_service.get_supported_games()
     }
 
+@app.get("/api/lottery/all-prizes")
+def get_all_prizes():
+    """Retorna os prêmios estimados de todas as loterias suportadas em uma única chamada com cache."""
+    results = {}
+    for g in LOTTERY_CONFIGS.keys():
+        try:
+            data = lottery_service.fetch_latest_contest(g)
+            results[g] = float(data.get("valor_estimado_proximo", 0.0))
+        except Exception as e:
+            logger.debug(f"Não foi possível carregar prêmio de {g}: {e}")
+            results[g] = 0.0
+    return {
+        "success": True,
+        "data": results
+    }
+
 @app.get("/api/lottery/info/{game_id}")
 def get_lottery_info(game_id: str):
     """Consulta o último concurso oficial em tempo real na API da Caixa."""

@@ -286,19 +286,40 @@ class TimesFMStudio {
     }
 
     async loadAllPrizes() {
+        // 1. Tenta carregar todas as estimativas de prêmios de uma vez só
+        try {
+            const res = await fetch('/api/lottery/all-prizes');
+            if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.data) {
+                    for (const [g, val] of Object.entries(json.data)) {
+                        const prizeEl = document.getElementById(`prize${this.capitalize(g)}`);
+                        if (prizeEl && val > 0) {
+                            prizeEl.textContent = this.formatCurrency(val);
+                        }
+                    }
+                    return;
+                }
+            }
+        } catch (e) {
+            console.debug('Tentando busca individual de prêmios...');
+        }
+
+        // 2. Fallback resiliente individual por modalidade
         const games = ['megasena', 'quina', 'lotofacil', 'lotomania'];
         for (const g of games) {
             try {
                 const res = await fetch(`/api/lottery/info/${g}`);
+                if (!res.ok) continue;
                 const json = await res.json();
                 if (json.success && json.data) {
                     const prizeEl = document.getElementById(`prize${this.capitalize(g)}`);
-                    if (prizeEl) {
+                    if (prizeEl && json.data.valor_estimado_proximo) {
                         prizeEl.textContent = this.formatCurrency(json.data.valor_estimado_proximo);
                     }
                 }
             } catch (e) {
-                console.warn(`Erro ao carregar prêmio de ${g}:`, e);
+                // Silencia falhas temporárias de gateway para não poluir o console
             }
         }
     }
@@ -348,9 +369,17 @@ class TimesFMStudio {
                 body: JSON.stringify({ game_id: gameId })
             });
 
-            const json = await res.json();
+            if (!res.ok) {
+                const text = await res.text();
+                let detail = 'Falha ao buscar dados';
+                try {
+                    const errJson = JSON.parse(text);
+                    detail = errJson.detail || detail;
+                } catch (_) {}
+                throw new Error(detail);
+            }
 
-            if (res.status === 503) throw new Error(json.detail || 'A API oficial da Caixa está indisponível no momento.');
+            const json = await res.json();
             if (!json.success || !json.data) throw new Error(json.detail || 'Falha ao buscar dados');
 
             this.currentLotteryData = json.data;
