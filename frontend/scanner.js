@@ -259,15 +259,18 @@ class TicketScannerMixin {
             instruction.textContent = message;
             instruction.style.color = colors[tone] || colors.muted;
         }
+    }
 
+    setManualStatus(message, tone = 'info') {
         const manualStatus = document.getElementById('manualStatusMsg');
         if (manualStatus) {
-            if (message) {
+            if (message && message.trim()) {
                 manualStatus.textContent = message;
                 manualStatus.className = `manual-status-box ${tone}`;
                 manualStatus.style.display = 'block';
             } else {
                 manualStatus.style.display = 'none';
+                manualStatus.textContent = '';
             }
         }
     }
@@ -523,7 +526,7 @@ class TicketScannerMixin {
         const contestInput = document.getElementById('manualContestInput');
 
         if (!input || !input.value.trim()) {
-            this.setScannerStatus('⚠️ Digite ou selecione as dezenas do seu jogo.', 'warn');
+            this.setManualStatus('⚠️ Digite ou selecione as dezenas do seu jogo.', 'warn');
             return;
         }
 
@@ -534,7 +537,7 @@ class TicketScannerMixin {
         numbers = [...new Set(numbers)].sort((a, b) => parseInt(a) - parseInt(b));
 
         if (numbers.length === 0) {
-            this.setScannerStatus('⚠️ Nenhuma dezena válida encontrada. Digite as dezenas de 2 em 2.', 'warn');
+            this.setManualStatus('⚠️ Nenhuma dezena válida encontrada. Digite as dezenas de 2 em 2.', 'warn');
             return;
         }
 
@@ -551,10 +554,11 @@ class TicketScannerMixin {
         const minBets = { megasena: 6, quina: 5, lotofacil: 15, lotomania: 50 };
         const minRequired = minBets[this.currentGame] || 5;
         if (numbers.length < minRequired) {
-            this.setScannerStatus(`⚠️ A ${this.capitalize(this.currentGame)} requer no mínimo ${minRequired} dezenas (você digitou ${numbers.length}).`, 'warn');
+            this.setManualStatus(`⚠️ A ${this.capitalize(this.currentGame)} requer no mínimo ${minRequired} dezenas (você digitou ${numbers.length}).`, 'warn');
             return;
         }
 
+        this.setManualStatus('');
         this.checkTicket(this.currentGame, numbers, contest);
     }
 
