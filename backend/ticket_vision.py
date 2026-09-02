@@ -305,9 +305,16 @@ class TicketVision:
                "S": "5", "s": "5", "B": "8", "Z": "2", "z": "2", "G": "6"}
 
     def _repair_digits(self, token: str) -> str:
-        if len(token) != 2:
-            return token
-        return "".join(self._TROCAS.get(c, c) for c in token)
+        if len(token) == 2:
+            return "".join(self._TROCAS.get(c, c) for c in token)
+
+        # Marca espuria grudada na dezena: o OCR devolve "O05" onde esta impresso "05".
+        # So descartamos o primeiro caractere quando ele e letra e sobram dois digitos -
+        # um numero de tres digitos legitimo nunca e dezena de loteria.
+        if len(token) == 3 and token[0].isalpha() and token[1:].isdigit():
+            return token[1:]
+
+        return token
 
     def _dedupe(self, numeros: List[str]) -> List[str]:
         vistos = set()
