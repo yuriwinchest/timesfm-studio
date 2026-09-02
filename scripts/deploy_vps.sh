@@ -13,17 +13,15 @@ set -euo pipefail
 
 echo "==> Preparando diretorios de cache"
 
-# Modelos do HuggingFace (TimesFM)
-mkdir -p hf_cache
-chmod -R 777 hf_cache
+# O container roda como uid 1001 (appuser). Dono correto no lugar de chmod 777:
+# permissao aberta em host compartilhado expoe cache a qualquer outro processo.
+mkdir -p hf_cache lottery_cache
+chown -R 1001:1001 hf_cache lottery_cache 2>/dev/null || chmod -R 775 hf_cache lottery_cache
 
-# Historico oficial da Caixa. O container roda como uid 1001, entao o diretorio
-# precisa ser gravavel por ele; sem isso o historico e rebuscado a cada subida.
-mkdir -p lottery_cache
-chmod -R 777 lottery_cache
-
+# Sem --remove-orphans: esta VPS hospeda outros sistemas em containers proprios e a
+# flag pode remover container irmao que o compose deste projeto nao conhece.
 echo "==> Subindo container isolado (limites de CPU e RAM no compose)"
-docker compose up -d --build --remove-orphans
+docker compose up -d --build
 
 echo "==> Aguardando a aplicacao responder"
 for tentativa in $(seq 1 30); do

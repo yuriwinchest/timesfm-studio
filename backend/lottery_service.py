@@ -7,6 +7,7 @@ from typing import Dict, Any, List, Optional
 import numpy as np
 
 from lottery_history import lottery_history
+import mirror
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("lottery-service")
@@ -82,7 +83,7 @@ class LotteryService:
         return list(LOTTERY_CONFIGS.values())
 
     def fetch_latest_contest(self, game_id: str) -> Dict[str, Any]:
-        """Consulta o último concurso diretamente da API oficial da Caixa com cache resiliente."""
+        """Consulta o último concurso diretamente da API oficial da Caixa ou espelhos transparentes com cache resiliente."""
         game_id = game_id.lower()
         if game_id not in LOTTERY_CONFIGS:
             raise ValueError(f"Modalidade de loteria não suportada: {game_id}")
@@ -92,31 +93,21 @@ class LotteryService:
         if cached and (now - cached["timestamp"] < self.cache_ttl):
             return cached["data"]
 
-        config = LOTTERY_CONFIGS[game_id]
-        endpoint = config["api_endpoint"]
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://loterias.caixa.gov.br/"
-        }
-
         try:
-            raw_data = self._get_json(endpoint, headers)
-            parsed = self._parse_caixa_response(game_id, raw_data)
+            raw_data, source_name = mirror.fetch_latest_with_fallback(game_id)
+            parsed = self._parse_caixa_response(game_id, raw_data, source_name=source_name)
             self.cache[game_id] = {"data": parsed, "timestamp": now}
             lottery_history.save_latest(game_id, parsed)
             return parsed
 
         except Exception as e:
-            logger.warning(f"Erro ao consultar API da Caixa para {game_id}: {e}")
+            logger.warning(f"Erro ao consultar API da Caixa/Espelhos para {game_id}: {e}")
 
             # Cache vencido ainda e dado REAL: melhor servir resultado oficial antigo,
             # devidamente marcado, do que inventar um sorteio.
             if cached:
                 stale = dict(cached["data"])
-                stale["origem"] = "Ultimo resultado oficial em cache (Caixa indisponivel agora)"
+                stale["origem"] = "Ultimo resultado oficial em cache (Caixa/Espelhos indisponiveis)"
                 return stale
 
             # Ultimo recurso ainda REAL: o resultado oficial gravado em disco na
@@ -124,79 +115,23 @@ class LotteryService:
             from_disk = lottery_history.load_latest(game_id)
             if from_disk:
                 from_disk = dict(from_disk)
-                from_disk["origem"] = "Ultimo resultado oficial gravado (Caixa indisponivel agora)"
+                from_disk["origem"] = "Ultimo resultado gravado em disco (Caixa/Espelhos indisponiveis)"
                 self.cache[game_id] = {"data": from_disk, "timestamp": now}
                 return from_disk
 
             raise LotteryUnavailable(
-                f"A API oficial da Caixa nao respondeu para {LOTTERY_CONFIGS[game_id]['name']} "
-                f"({self.last_error or e}) e nao ha resultado real em cache. "
-                f"Nenhum dado sera exibido no lugar."
+                f"A API oficial da Caixa e espelhos nao responderam para {LOTTERY_CONFIGS[game_id]['name']} "
+                f"({self.last_error or e}) e nao ha resultado real em cache."
             ) from e
-
-    def _get_json(self, endpoint: str, headers: Dict[str, str]) -> Dict[str, Any]:
-        """
-        Consulta a Caixa recuando quando ela devolve 429.
-
-        A busca de historico ja fazia isso; o ultimo concurso nao fazia, e era
-        justamente ele que derrubava a tela inteira quando a Caixa limitava a taxa.
-        Guarda o ultimo erro para o diagnostico dizer o que realmente aconteceu.
-        """
-        ultimo_erro = None
-        for espera in (0.0, 1.5, 4.0):
-            if espera:
-                time.sleep(espera)
-            try:
-                req = urllib.request.Request(endpoint, headers=headers)
-                with urllib.request.urlopen(req, timeout=12) as response:
-                    return json.loads(response.read().decode("utf-8"))
-            except urllib.error.HTTPError as e:
-                ultimo_erro = f"HTTP {e.code} {e.reason}"
-                if e.code != 429:
-                    break
-            except Exception as e:
-                ultimo_erro = f"{type(e).__name__}: {e}"
-                break
-
-        self.last_error = ultimo_erro
-        raise RuntimeError(ultimo_erro or "falha desconhecida ao consultar a Caixa")
 
     def diagnose(self) -> Dict[str, Any]:
         """
-        Testa a fonte oficial modalidade a modalidade e reporta o erro exato.
-
-        Existe porque "a Caixa nao respondeu" nao diz nada: bloqueio por IP, limite de
-        taxa, DNS e timeout exigem correcoes completamente diferentes, e de fora do
-        servidor nao ha como distinguir.
+        Testa a fonte oficial e os espelhos transparentes modalidade a modalidade.
         """
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Referer": "https://loterias.caixa.gov.br/"
-        }
-
-        resultado = {}
-        for game_id, config in LOTTERY_CONFIGS.items():
-            inicio = time.time()
-            try:
-                req = urllib.request.Request(config["api_endpoint"], headers=headers)
-                with urllib.request.urlopen(req, timeout=12) as response:
-                    payload = json.loads(response.read().decode("utf-8"))
-                resultado[game_id] = {
-                    "ok": True,
-                    "concurso": payload.get("numero"),
-                    "ms": round((time.time() - inicio) * 1000),
-                }
-            except urllib.error.HTTPError as e:
-                resultado[game_id] = {"ok": False, "erro": f"HTTP {e.code} {e.reason}",
-                                      "ms": round((time.time() - inicio) * 1000)}
-            except Exception as e:
-                resultado[game_id] = {"ok": False, "erro": f"{type(e).__name__}: {e}",
-                                      "ms": round((time.time() - inicio) * 1000)}
-        return resultado
+        return mirror.diagnose_sources()
 
     def fetch_contest_by_number(self, game_id: str, contest_number: int) -> Dict[str, Any]:
-        """Consulta um concurso específico pelo seu número diretamente na API oficial da Caixa."""
+        """Consulta um concurso específico pelo seu número diretamente na API oficial ou espelhos."""
         game_id = game_id.lower()
         if game_id not in LOTTERY_CONFIGS:
             raise ValueError(f"Modalidade de loteria não suportada: {game_id}")
@@ -207,25 +142,15 @@ class LotteryService:
             return cached["data"]
 
         config = LOTTERY_CONFIGS[game_id]
-        endpoint = f"{config['api_endpoint']}/{contest_number}"
-
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "pt-BR,pt;q=0.9,en-US;q=0.8,en;q=0.7",
-            "Referer": "https://loterias.caixa.gov.br/"
-        }
 
         try:
-            raw_data = self._get_json(endpoint, headers)
-            parsed = self._parse_caixa_response(game_id, raw_data)
+            raw_data, source_name = mirror.fetch_contest_with_fallback(game_id, contest_number)
+            parsed = self._parse_caixa_response(game_id, raw_data, source_name=source_name)
 
-            # Concurso ainda nao sorteado volta 200 com corpo vazio, sem levantar erro.
-            # Sem esta guarda, o bilhete seria conferido contra dezenas inexistentes.
             if not parsed.get("dezenas") or int(parsed.get("concurso") or 0) != int(contest_number):
                 raise LotteryUnavailable(
-                    f"O concurso {contest_number} da {config['name']} ainda nao foi divulgado "
-                    f"pela Caixa. Guarde o bilhete e confira apos o sorteio."
+                    f"O concurso {contest_number} da {config['name']} ainda nao foi divulgado. "
+                    f"Guarde o bilhete e confira apos o sorteio."
                 )
 
             self.cache[cache_key] = {"data": parsed, "timestamp": time.time()}
@@ -233,17 +158,17 @@ class LotteryService:
         except LotteryUnavailable:
             raise
         except Exception as e:
-            logger.warning(f"Erro ao consultar concurso {contest_number} da {game_id} na Caixa: {e}")
+            logger.warning(f"Erro ao consultar concurso {contest_number} da {game_id}: {e}")
             raise LotteryUnavailable(
                 f"O concurso {contest_number} da {LOTTERY_CONFIGS[game_id]['name']} nao foi "
-                f"devolvido pela Caixa. Pode ainda nao ter sido sorteado."
+                f"devolvido pela Caixa ou espelhos."
             ) from e
 
-    def _parse_caixa_response(self, game_id: str, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def _parse_caixa_response(self, game_id: str, raw: Dict[str, Any], source_name: Optional[str] = None) -> Dict[str, Any]:
         config = LOTTERY_CONFIGS[game_id]
         
         # Dezenas sorteadas
-        dezenas = raw.get("listaDezenas") or raw.get("dezenasSorteadasOrdemSorteio") or []
+        dezenas = raw.get("listaDezenas") or raw.get("dezenas") or raw.get("dezenasSorteadasOrdemSorteio") or []
         dezenas_formatadas = [str(d).zfill(config["format_digits"]) for d in dezenas]
         dezenas_formatadas.sort(key=lambda x: int(x))
 
@@ -260,8 +185,8 @@ class LotteryService:
         return {
             "game_id": game_id,
             "game_name": config["name"],
-            "concurso": raw.get("numero", 0),
-            "data_apuracao": raw.get("dataApuracao", ""),
+            "concurso": raw.get("numero") or raw.get("concurso", 0),
+            "data_apuracao": raw.get("dataApuracao") or raw.get("data", ""),
             "dezenas": dezenas_formatadas,
             "acumulou": bool(raw.get("acumulado", False)),
             "proximo_concurso": raw.get("numeroConcursoProximo", 0),
@@ -271,7 +196,7 @@ class LotteryService:
             "local_sorteio": raw.get("localSorteio", "ESPAÇO DA SORTE"),
             "municipio_sorteio": raw.get("nomeMunicipioUFSorteio", "SÃO PAULO, SP"),
             "rateio": rateio,
-            "origem": "API Oficial Loterias Caixa (Tempo Real)"
+            "origem": source_name or "API Oficial Loterias Caixa (Tempo Real)"
         }
 
     MIN_HISTORY = 10
@@ -279,11 +204,6 @@ class LotteryService:
     def fetch_historical_draws(self, game_id: str, count: int = 50) -> List[List[int]]:
         """
         Retorna os sorteios REAIS dos ultimos concursos, do mais antigo ao mais recente.
-
-        Antes esta funcao gerava a serie com np.random.choice e semente fixa, mantendo
-        apenas o ultimo concurso verdadeiro. O modelo estava lendo ruido inventado. Agora
-        cada concurso vem da API oficial da Caixa (ver lottery_history.py) e o que nao
-        vier simplesmente nao entra: serie menor e honesta em vez de serie cheia e falsa.
         """
         config = LOTTERY_CONFIGS[game_id]
         latest = self.fetch_latest_contest(game_id)
@@ -297,7 +217,7 @@ class LotteryService:
 
         if len(draws) < self.MIN_HISTORY:
             raise LotteryUnavailable(
-                f"So consegui {len(draws)} concursos reais de {config['name']} na Caixa e a "
+                f"So consegui {len(draws)} concursos reais de {config['name']} e a "
                 f"analise exige ao menos {self.MIN_HISTORY}. Nao vou preencher a serie com "
                 f"dados inventados - tente novamente em instantes."
             )

@@ -28,6 +28,7 @@ jobs:
           python -m py_compile backend/ticket_vision.py
           python -m py_compile backend/lottery_rules.py
           python -m py_compile backend/lottery_history.py
+          python -m py_compile backend/mirror.py
 
       - name: Instalar stack optica para o teste de leitura
         run: |

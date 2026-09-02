@@ -1,16 +1,9 @@
 """
 Historico real de sorteios das Loterias Caixa.
 
-Este modulo existe para matar uma mentira que estava no coracao do produto: o
-historico que alimentava o modelo era gerado com np.random.choice e semente fixa.
-De 60 concursos, 59 eram inventados. Toda a analise de frequencia, dezenas quentes,
-atrasadas e o score de confianca eram, na pratica, modelagem de ruido pseudoaleatorio
-apresentada como previsao.
-
-Aqui o historico vem concurso a concurso da API oficial da Caixa. Concurso sorteado e
-imutavel, entao cada um e buscado uma unica vez e gravado em disco - a partir dai o
-custo e zero. Se um concurso nao vier, ele fica de fora: a serie encolhe e o sistema
-diz quantos concursos reais sustentam a analise. Nada e completado com invencao.
+Este modulo existe para alimentar o modelo TimesFM com dados reais e comprovados:
+cada concurso vem da API oficial da Caixa ou de espelhos transparentes. Concurso sorteado
+e imutavel, entao cada um e buscado uma unica vez e gravado em disco com cache persistente.
 """
 
 import json
@@ -25,24 +18,25 @@ import urllib.request
 from concurrent.futures import ThreadPoolExecutor
 from typing import Dict, List, Optional
 
+import mirror
+
 logger = logging.getLogger("lottery-history")
 
 CAIXA_HEADERS = {
-    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                   "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"),
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    ),
     "Accept": "application/json, text/plain, */*",
     "Accept-Language": "pt-BR,pt;q=0.9",
     "Referer": "https://loterias.caixa.gov.br/",
 }
 
-# A Caixa responde 429 quando levamos a serio o "quanto mais rapido melhor": 8 workers
-# varrendo as quatro modalidades de uma vez derrubaram a consulta. 4 workers com pausa
-# entre lotes trazem 60 concursos em poucos segundos e nao provocam bloqueio.
 MAX_WORKERS = 4
-REQUEST_TIMEOUT = 12
+REQUEST_TIMEOUT = 10
 BATCH_SIZE = 12
-BATCH_PAUSE = 1.2
-RETRY_BACKOFF = (2.0, 5.0, 9.0)
+BATCH_PAUSE = 1.0
+RETRY_BACKOFF = (1.5, 3.5)
 
 
 class LotteryHistory:
@@ -78,9 +72,6 @@ class LotteryHistory:
         logger.warning("Nenhum diretorio de cache gravavel: historico sera buscado a cada vez.")
         return ""
 
-    # ------------------------------------------------------------------
-    # Cache em disco (concurso sorteado nunca muda)
-    # ------------------------------------------------------------------
     def _cache_path(self, game_id: str) -> str:
         return os.path.join(self.cache_dir, f"{game_id}_historico.json") if self.cache_dir else ""
 
@@ -114,39 +105,38 @@ class LotteryHistory:
         except Exception as e:
             logger.warning("Nao consegui gravar o cache de %s: %s", game_id, e)
 
-    # ------------------------------------------------------------------
-    # Busca oficial
-    # ------------------------------------------------------------------
-    def _fetch_one(self, endpoint: str, contest: int) -> tuple:
-        """Busca um concurso, recuando quando a Caixa sinaliza excesso de chamadas."""
+    def _fetch_one(self, game_id: str, endpoint: str, contest: int) -> tuple:
+        """Busca um concurso na Caixa oficial ou espelhos de contingência."""
+        # 1. Tentativa na Caixa Oficial
         for tentativa, espera in enumerate((0.0,) + RETRY_BACKOFF):
             if espera:
-                time.sleep(espera + random.uniform(0, 0.6))
+                time.sleep(espera + random.uniform(0, 0.4))
             try:
                 request = urllib.request.Request(f"{endpoint}/{contest}", headers=CAIXA_HEADERS)
                 with urllib.request.urlopen(request, timeout=REQUEST_TIMEOUT) as response:
                     payload = json.loads(response.read().decode("utf-8"))
                 dezenas = payload.get("listaDezenas") or payload.get("dezenasSorteadasOrdemSorteio") or []
-                return contest, [str(d).zfill(2) for d in dezenas]
+                if dezenas:
+                    return contest, [str(d).zfill(2) for d in dezenas]
             except urllib.error.HTTPError as e:
+                if e.code == 403 or e.code == 404:
+                    # 403 Azion WAF na VPS: pula imediatamente para os espelhos
+                    break
                 if e.code != 429:
-                    logger.debug("Concurso %s indisponivel: %s", contest, e)
-                    return contest, []
-                logger.debug("429 no concurso %s (tentativa %d)", contest, tentativa + 1)
-            except Exception as e:
-                logger.debug("Concurso %s indisponivel: %s", contest, e)
-                return contest, []
+                    break
+            except Exception:
+                break
 
-        logger.info("Concurso %s desistiu apos sucessivos 429 da Caixa", contest)
-        return contest, []
+        # 2. Fallback resiliente nos espelhos transparentes
+        try:
+            return mirror.fetch_history_draw_with_fallback(game_id, contest)
+        except Exception as e:
+            logger.debug("Concurso %s de %s falhou no espelho: %s", contest, game_id, e)
+            return contest, []
 
     def draws(self, game_id: str, endpoint: str, latest_contest: int, count: int) -> List[List[int]]:
         """
         Devolve ate `count` sorteios REAIS, do mais antigo para o mais recente.
-
-        So retorna concurso que a Caixa confirmou. Se parte da janela nao vier, a serie
-        volta menor - e quem consome precisa dizer ao usuario com quantos concursos
-        reais a analise foi feita.
         """
         if latest_contest <= 0:
             return []
@@ -158,13 +148,17 @@ class LotteryHistory:
             missing = [n for n in wanted if n not in stored]
 
         if missing:
-            logger.info("Buscando %d concursos de %s na Caixa (%d ja em cache)",
-                        len(missing), game_id, len(wanted) - len(missing))
+            logger.info(
+                "Buscando %d concursos de %s (%d ja em cache)",
+                len(missing),
+                game_id,
+                len(wanted) - len(missing),
+            )
             results = []
             with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
                 for inicio in range(0, len(missing), BATCH_SIZE):
                     lote = missing[inicio:inicio + BATCH_SIZE]
-                    results.extend(pool.map(lambda n: self._fetch_one(endpoint, n), lote))
+                    results.extend(pool.map(lambda n: self._fetch_one(game_id, endpoint, n), lote))
                     if inicio + BATCH_SIZE < len(missing):
                         time.sleep(BATCH_PAUSE)
 
@@ -184,15 +178,12 @@ class LotteryHistory:
 
         faltantes = len(wanted) - len(draws)
         if faltantes:
-            logger.info("%s: %d concursos da janela nao estao disponiveis na Caixa", game_id, faltantes)
+            logger.info("%s: %d concursos da janela nao estao disponiveis", game_id, faltantes)
 
         return draws
 
-    # ------------------------------------------------------------------
-    # Ultimo concurso completo (com rateio) persistido em disco
-    # ------------------------------------------------------------------
     def save_latest(self, game_id: str, data: dict) -> None:
-        """Guarda o ultimo resultado OFICIAL para sobreviver a um 429 no arranque."""
+        """Guarda o ultimo resultado OFICIAL para sobreviver a indisponibilidades."""
         path = os.path.join(self.cache_dir, f"{game_id}_ultimo.json") if self.cache_dir else ""
         if not path:
             return
@@ -205,7 +196,7 @@ class LotteryHistory:
             logger.warning("Nao consegui gravar o ultimo concurso de %s: %s", game_id, e)
 
     def load_latest(self, game_id: str) -> Optional[dict]:
-        """Le o ultimo resultado oficial gravado. E dado real, apenas possivelmente antigo."""
+        """Le o ultimo resultado gravado em disco."""
         path = os.path.join(self.cache_dir, f"{game_id}_ultimo.json") if self.cache_dir else ""
         if not path or not os.path.exists(path):
             return None
