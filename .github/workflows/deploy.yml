@@ -46,39 +46,84 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Deploy via SSH to VPS
+      # A conexao SSH do runner com esta VPS falha de forma intermitente
+      # ("dial tcp :22: i/o timeout"): 3 quedas em 8 deploys, e todas as vezes uma
+      # nova tentativa imediata funcionou. Pedir re-run na mao nao e opcao - o fluxo
+      # existe para nao depender de intervencao manual. Entao a pipeline retenta.
+      - name: Deploy na VPS (tentativa 1)
+        id: deploy1
+        continue-on-error: true
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           key: ${{ secrets.VPS_SSH_KEY }}
+          timeout: 120s
+          command_timeout: 25m
           script: |
             set -e
-            echo "Iniciando deploy do TimesFM Studio..."
-            
             DEPLOY_DIR="/var/www/timesfm-studio"
             mkdir -p $DEPLOY_DIR
             cd $DEPLOY_DIR
-
             if [ ! -d ".git" ]; then
               git clone https://github.com/yuriwinchest/timesfm-studio.git .
             else
               git fetch origin main
               git reset --hard origin/main
             fi
+            bash scripts/deploy_vps.sh
+      - name: Pausa antes da tentativa 2
+        if: steps.deploy1.outcome == 'failure'
+        run: sleep 45
 
-            # Criar pasta de cache para os modelos
-            mkdir -p hf_cache
-            chmod -R 777 hf_cache
+      - name: Deploy na VPS (tentativa 2)
+        id: deploy2
+        if: steps.deploy1.outcome == 'failure'
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          timeout: 120s
+          command_timeout: 25m
+          script: |
+            set -e
+            DEPLOY_DIR="/var/www/timesfm-studio"
+            mkdir -p $DEPLOY_DIR
+            cd $DEPLOY_DIR
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/yuriwinchest/timesfm-studio.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+            bash scripts/deploy_vps.sh
+      - name: Pausa antes da tentativa final
+        if: steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
+        run: sleep 120
 
-            # Cache do historico oficial da Caixa (container roda como uid 1001)
-            mkdir -p lottery_cache
-            chmod -R 777 lottery_cache
-
-            # Subir ou recriar containers Docker isolados com limites de CPU e RAM
-            echo "Subindo container Docker isolado..."
-            docker compose down || true
-            docker compose up -d --build
-
-            echo "Deploy concluido com sucesso!"
+      - name: Deploy na VPS (tentativa final)
+        if: steps.deploy1.outcome == 'failure' && steps.deploy2.outcome == 'failure'
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          timeout: 120s
+          command_timeout: 25m
+          script: |
+            set -e
+            DEPLOY_DIR="/var/www/timesfm-studio"
+            mkdir -p $DEPLOY_DIR
+            cd $DEPLOY_DIR
+            if [ ! -d ".git" ]; then
+              git clone https://github.com/yuriwinchest/timesfm-studio.git .
+            else
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+            bash scripts/deploy_vps.sh
