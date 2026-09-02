@@ -78,6 +78,12 @@ def executar(nome, imagem, jogo_esperado, concurso_esperado, dezenas_esperadas):
     print("  dezenas lidas:", len(resultado["numbers"]), resultado["numbers"])
     print("  mensagem:", resultado["message"])
 
+    if not resultado["success"] or len(resultado["numbers"]) != dezenas_esperadas:
+        # Diagnostico: sem o texto bruto, uma falha de leitura no CI vira adivinhacao.
+        print("  --- texto lido pelo OCR ---")
+        for linha in resultado["raw_text"].splitlines():
+            print("   |", linha)
+
     if resultado["game_id"] != jogo_esperado:
         falhas.append(f"{nome}: modalidade {resultado['game_id']}, esperado {jogo_esperado}")
 

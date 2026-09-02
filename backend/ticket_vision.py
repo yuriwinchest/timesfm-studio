@@ -265,20 +265,35 @@ class TicketVision:
 
         tokens = limpa.split()
 
-        # Marcador da aposta isolado no inicio da linha
-        if tokens and len(tokens[0]) == 1 and tokens[0].isalpha():
+        # Marcador da aposta no inicio da linha ("A", "B", e variacoes que o OCR
+        # produz sobre ele). Curto e nao numerico: nunca engole uma dezena.
+        if tokens and len(tokens[0]) <= 2 and not tokens[0].isdigit():
             tokens = tokens[1:]
 
         if len(tokens) < 2:
             return []
 
+        dezenas = []
         for token in tokens:
-            if not re.fullmatch(r"\d{2}", token):
+            corrigido = self._repair_digits(token)
+            if not re.fullmatch(r"\d{2}", corrigido):
                 return []
-            if not (baixo <= int(token) <= alto):
+            if not (baixo <= int(corrigido) <= alto):
                 return []
+            dezenas.append(corrigido)
 
-        return tokens
+        return dezenas
+
+    # Confusoes classicas do OCR em papel termico. Aplicadas so em token de 2
+    # caracteres: uma letra solta no meio da aposta continua invalidando a linha.
+    _TROCAS = {"O": "0", "o": "0", "D": "0", "Q": "0",
+               "I": "1", "l": "1", "i": "1",
+               "S": "5", "s": "5", "B": "8", "Z": "2", "z": "2", "G": "6"}
+
+    def _repair_digits(self, token: str) -> str:
+        if len(token) != 2:
+            return token
+        return "".join(self._TROCAS.get(c, c) for c in token)
 
     def _dedupe(self, numeros: List[str]) -> List[str]:
         vistos = set()
