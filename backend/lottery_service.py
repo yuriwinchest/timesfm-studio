@@ -76,6 +76,7 @@ class LotteryService:
         self.cache: Dict[str, Dict[str, Any]] = {}
         self.cache_ttl = 300  # 5 minutos de cache em memória
         self.history_cache: Dict[str, List[Dict[str, Any]]] = {}
+        self.last_error: Optional[str] = None
 
     def get_supported_games(self) -> List[Dict[str, Any]]:
         return list(LOTTERY_CONFIGS.values())
@@ -102,11 +103,7 @@ class LotteryService:
         }
 
         try:
-            req = urllib.request.Request(endpoint, headers=headers)
-            with urllib.request.urlopen(req, timeout=10) as response:
-                payload = response.read().decode("utf-8")
-                raw_data = json.loads(payload)
-
+            raw_data = self._get_json(endpoint, headers)
             parsed = self._parse_caixa_response(game_id, raw_data)
             self.cache[game_id] = {"data": parsed, "timestamp": now}
             lottery_history.save_latest(game_id, parsed)
@@ -133,8 +130,70 @@ class LotteryService:
 
             raise LotteryUnavailable(
                 f"A API oficial da Caixa nao respondeu para {LOTTERY_CONFIGS[game_id]['name']} "
-                f"e nao ha resultado real em cache. Nenhum dado sera exibido no lugar."
+                f"({self.last_error or e}) e nao ha resultado real em cache. "
+                f"Nenhum dado sera exibido no lugar."
             ) from e
+
+    def _get_json(self, endpoint: str, headers: Dict[str, str]) -> Dict[str, Any]:
+        """
+        Consulta a Caixa recuando quando ela devolve 429.
+
+        A busca de historico ja fazia isso; o ultimo concurso nao fazia, e era
+        justamente ele que derrubava a tela inteira quando a Caixa limitava a taxa.
+        Guarda o ultimo erro para o diagnostico dizer o que realmente aconteceu.
+        """
+        ultimo_erro = None
+        for espera in (0.0, 1.5, 4.0):
+            if espera:
+                time.sleep(espera)
+            try:
+                req = urllib.request.Request(endpoint, headers=headers)
+                with urllib.request.urlopen(req, timeout=12) as response:
+                    return json.loads(response.read().decode("utf-8"))
+            except urllib.error.HTTPError as e:
+                ultimo_erro = f"HTTP {e.code} {e.reason}"
+                if e.code != 429:
+                    break
+            except Exception as e:
+                ultimo_erro = f"{type(e).__name__}: {e}"
+                break
+
+        self.last_error = ultimo_erro
+        raise RuntimeError(ultimo_erro or "falha desconhecida ao consultar a Caixa")
+
+    def diagnose(self) -> Dict[str, Any]:
+        """
+        Testa a fonte oficial modalidade a modalidade e reporta o erro exato.
+
+        Existe porque "a Caixa nao respondeu" nao diz nada: bloqueio por IP, limite de
+        taxa, DNS e timeout exigem correcoes completamente diferentes, e de fora do
+        servidor nao ha como distinguir.
+        """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Referer": "https://loterias.caixa.gov.br/"
+        }
+
+        resultado = {}
+        for game_id, config in LOTTERY_CONFIGS.items():
+            inicio = time.time()
+            try:
+                req = urllib.request.Request(config["api_endpoint"], headers=headers)
+                with urllib.request.urlopen(req, timeout=12) as response:
+                    payload = json.loads(response.read().decode("utf-8"))
+                resultado[game_id] = {
+                    "ok": True,
+                    "concurso": payload.get("numero"),
+                    "ms": round((time.time() - inicio) * 1000),
+                }
+            except urllib.error.HTTPError as e:
+                resultado[game_id] = {"ok": False, "erro": f"HTTP {e.code} {e.reason}",
+                                      "ms": round((time.time() - inicio) * 1000)}
+            except Exception as e:
+                resultado[game_id] = {"ok": False, "erro": f"{type(e).__name__}: {e}",
+                                      "ms": round((time.time() - inicio) * 1000)}
+        return resultado
 
     def fetch_contest_by_number(self, game_id: str, contest_number: int) -> Dict[str, Any]:
         """Consulta um concurso específico pelo seu número diretamente na API oficial da Caixa."""
@@ -158,11 +217,7 @@ class LotteryService:
         }
 
         try:
-            req = urllib.request.Request(endpoint, headers=headers)
-            with urllib.request.urlopen(req, timeout=10) as response:
-                payload = response.read().decode("utf-8")
-                raw_data = json.loads(payload)
-
+            raw_data = self._get_json(endpoint, headers)
             parsed = self._parse_caixa_response(game_id, raw_data)
 
             # Concurso ainda nao sorteado volta 200 com corpo vazio, sem levantar erro.

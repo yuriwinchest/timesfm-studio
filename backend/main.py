@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from engine import engine
 from lottery_service import lottery_service, LotteryUnavailable, LOTTERY_CONFIGS
+from lottery_history import lottery_history
 from ticket_scanner import ticket_scanner
 from ticket_checker import check_ticket
 
@@ -70,15 +71,25 @@ def aquecer_historico_oficial():
     """
     def aquecer():
         log = logging.getLogger("startup")
-        for indice, game_id in enumerate(LOTTERY_CONFIGS):
-            if indice:
-                # Espaco entre modalidades: varrer as quatro em rajada provoca 429 na Caixa
-                time.sleep(20)
+
+        # Ordem importa: primeiro os quatro ultimos concursos (4 chamadas baratas que
+        # ja deixam o dashboard de pe e gravadas em disco), so depois o historico. Ao
+        # contrario, uma rajada de historico derruba ate a consulta do ultimo concurso.
+        for game_id in LOTTERY_CONFIGS:
+            try:
+                dados = lottery_service.fetch_latest_contest(game_id)
+                log.info("Ultimo concurso de %s pronto: #%s", game_id, dados.get("concurso"))
+            except Exception as e:
+                log.warning("Ultimo concurso de %s indisponivel: %s", game_id, e)
+            time.sleep(5)
+
+        for game_id in LOTTERY_CONFIGS:
             try:
                 total = len(lottery_service.fetch_historical_draws(game_id, count=60))
                 log.info("Historico de %s pronto: %d concursos reais", game_id, total)
             except Exception as e:
                 log.warning("Historico de %s adiado: %s", game_id, e)
+            time.sleep(30)
 
     threading.Thread(target=aquecer, name="aquecer-historico", daemon=True).start()
 
@@ -98,6 +109,16 @@ def health_check():
 # ==========================================
 # ROTAS DO MÓDULO DE LOTERIAS CAIXA
 # ==========================================
+
+@app.get("/api/lottery/source-status")
+def source_status():
+    """Testa a fonte oficial agora e reporta o erro exato de cada modalidade."""
+    return {
+        "fonte": "servicebus2.caixa.gov.br",
+        "modalidades": lottery_service.diagnose(),
+        "cache_historico": {g: lottery_history.cached_count(g) for g in LOTTERY_CONFIGS},
+        "diretorio_cache": lottery_history.cache_dir or "(nenhum gravavel)",
+    }
 
 @app.get("/api/lottery/games")
 def get_lottery_games():
