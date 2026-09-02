@@ -59,13 +59,18 @@ class TicketScanner:
         oriented, orientation = self.vision.auto_orient(image)
         text = self.vision.ocr(oriented, TESS_TEXT)
 
-        game_id = self._detect_game(text) or hint_game
+        detected = self._detect_game(text)
+        game_id = detected or hint_game
         contest = self._detect_contest(text) or self._contest_from_qr(qr_payload)
         numbers = self.vision.extract_numbers(oriented, game_id)
 
         valid, validation_msg = self._validate(numbers, game_id)
 
-        if not valid:
+        # A deducao so entra quando o logo NAO foi lido. Deixa-la sobrepor o logo
+        # impresso produziu um erro grave em teste: as 50 dezenas de uma Lotomania,
+        # filtradas pela faixa da Lotofacil (01-25), sobraram exatamente 15 e passaram
+        # como aposta valida de outra modalidade. O que esta impresso manda.
+        if not valid and not detected:
             deduced = self._deduce_game(oriented, skip=game_id)
             if deduced:
                 game_id, numbers = deduced
