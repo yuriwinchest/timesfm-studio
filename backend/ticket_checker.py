@@ -10,7 +10,7 @@ import re
 from typing import Any, Dict, List, Optional
 
 from lottery_service import LOTTERY_CONFIGS, lottery_service
-from ticket_scanner import BET_SIZE_RULES, NUMBER_RANGE_RULES
+from lottery_rules import BET_SIZE_RULES, NUMBER_RANGE_RULES
 
 logger = logging.getLogger("ticket-checker")
 
@@ -75,7 +75,18 @@ def check_ticket(game_id: str, raw_numbers: List[Any], contest_number: Optional[
     validate_bet_size(numbers, game_id)
 
     if contest_number:
-        contest = lottery_service.fetch_contest_by_number(game_id, int(contest_number))
+        requested = int(contest_number)
+        contest = lottery_service.fetch_contest_by_number(game_id, requested)
+
+        # O fetch cai para o ultimo concurso quando a Caixa nao devolve o pedido, o que
+        # acontece com bilhete de sorteio que ainda nao ocorreu. Conferir contra outro
+        # concurso seria dar um resultado falso ao apostador.
+        if int(contest.get("concurso") or 0) != requested:
+            raise ValueError(
+                f"O concurso {requested} da {LOTTERY_CONFIGS[game_id]['name']} ainda nao "
+                f"foi divulgado pela Caixa. O ultimo disponivel e o "
+                f"{contest.get('concurso')} - guarde o bilhete e confira apos o sorteio."
+            )
     else:
         contest = lottery_service.fetch_latest_contest(game_id)
 
