@@ -420,13 +420,49 @@ class TicketScannerMixin {
             });
             grid.appendChild(ball);
         }
+
+        // Configura máscara automática e escuta no campo de digitação
+        const input = document.getElementById('manualNumbersInput');
+        if (input && !input._hasMaskListener) {
+            input._hasMaskListener = true;
+            input.addEventListener('input', () => {
+                this.handleManualInputMask(input);
+            });
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    this.checkManualGame();
+                }
+            });
+        }
+    }
+
+    handleManualInputMask(input) {
+        if (!input) return;
+        // Extrai apenas dígitos
+        const raw = input.value.replace(/\D/g, '');
+        // Divide automaticamente de 2 em 2 dígitos
+        const chunks = raw.match(/.{1,2}/g) || [];
+        input.value = chunks.join(' ');
+
+        // Sincroniza com as bolinhas do volante visual
+        this.selectedManualNumbers.clear();
+        chunks.forEach(c => {
+            if (c.length === 2) {
+                this.selectedManualNumbers.add(c);
+            }
+        });
+
+        document.querySelectorAll('.pick-ball').forEach(ball => {
+            ball.classList.toggle('selected', this.selectedManualNumbers.has(ball.textContent));
+        });
     }
 
     updateManualInputText() {
         const input = document.getElementById('manualNumbersInput');
         if (input) {
             const sorted = Array.from(this.selectedManualNumbers).sort((a, b) => parseInt(a) - parseInt(b));
-            input.value = sorted.join(', ');
+            input.value = sorted.join(' ');
         }
     }
 
@@ -435,21 +471,34 @@ class TicketScannerMixin {
         const contestInput = document.getElementById('manualContestInput');
 
         if (!input || !input.value.trim()) {
-            this.setScannerStatus('⚠️ Selecione ou digite as dezenas do seu bilhete.', 'warn');
+            this.setScannerStatus('⚠️ Digite ou selecione as dezenas do seu jogo.', 'warn');
             return;
         }
 
-        const numbers = input.value
-            .split(/[\s,;.-]+/)
-            .map(n => n.trim())
-            .filter(n => /^\d{1,2}$/.test(n))
-            .map(n => n.padStart(2, '0'));
+        // 1. Extração robusta: suporta '0424344252', '04 24 34', '04, 24, 34', etc.
+        const rawDigits = input.value.replace(/\D/g, '');
+        let numbers = rawDigits.match(/.{1,2}/g) || [];
+        numbers = numbers.map(n => n.padStart(2, '0'));
+        numbers = [...new Set(numbers)].sort((a, b) => parseInt(a) - parseInt(b));
+
+        if (numbers.length === 0) {
+            this.setScannerStatus('⚠️ Nenhuma dezena válida encontrada. Digite as dezenas de 2 em 2.', 'warn');
+            return;
+        }
+
+        // Validação da aposta mínima por modalidade
+        const minBets = { megasena: 6, quina: 5, lotofacil: 15, lotomania: 50 };
+        const minRequired = minBets[this.currentGame] || 5;
+        if (numbers.length < minRequired) {
+            this.setScannerStatus(`⚠️ A ${this.capitalize(this.currentGame)} requer no mínimo ${minRequired} dezenas (você digitou ${numbers.length}).`, 'warn');
+            return;
+        }
 
         const contest = contestInput && contestInput.value.trim()
             ? parseInt(contestInput.value.trim(), 10)
             : null;
 
-        this.checkTicket(this.currentGame, [...new Set(numbers)], contest);
+        this.checkTicket(this.currentGame, numbers, contest);
     }
 
     /**
@@ -462,7 +511,7 @@ class TicketScannerMixin {
             const res = await fetch('/api/lottery/check-ticket', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ game_id: gameId, numbers, contest })
+                body: JSON.stringify({ game_id: gameId, numbers, contest, games })
             });
             const json = await res.json();
 
@@ -498,7 +547,10 @@ class TicketScannerMixin {
         const officialBallsRow = document.getElementById('officialResultBalls');
         const gamesContainer = document.getElementById('ticketGamesContainer');
 
-        if (resultBox) resultBox.style.display = 'flex';
+        if (resultBox) {
+            resultBox.style.display = 'flex';
+            resultBox.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        }
 
         const contestLabel = `Concurso #${result.contest} • ${result.contest_date || ''}`.trim();
         if (contestBadge) {
@@ -526,7 +578,7 @@ class TicketScannerMixin {
                     ? detectedGames.map((g, idx) => {
                         const gHits = g.filter(n => officialSet.has(n));
                         return {
-                            game_label: `Jogo ${chr(65 + idx) || (idx + 1)}`,
+                            game_label: `Jogo ${String.fromCharCode(65 + idx)}`,
                             numbers: g,
                             hit_count: gHits.length,
                             hit_numbers: gHits
